@@ -16,13 +16,32 @@ Copyright (C) Microsoft Corporation. All rights reserved.
     <AllowUnsafeBlocks Condition="'$(CsWinRTComponent)' == 'true'">true</AllowUnsafeBlocks>
     <AllowUnsafeBlocks Condition="$(CsWinRTEnabled)">true</AllowUnsafeBlocks>
     <CoreCompileDependsOn>CsWinRTIncludeProjection;CsWinRTRemoveWinMDReferences;$(CoreCompileDependsOn)</CoreCompileDependsOn>
+    <TrackFileAccess Condition="'$(CsWinRTComponent)' != 'true'">false</TrackFileAccess> 
+    <!-- Make sure WinRT.Runtime.dll and Microsoft.Windows.SDK.NET.dll get binplaced with authored component's dll -->
+    <CopyLocalLockFileAssemblies Condition="'$(CsWinRTComponent)' == 'true'">true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
-  
-  <!--Remove Windows.Winmd reference to prevent compile collisions-->
-  <Target Name="CsWinRTRemoveWindowsReference" Outputs="@(Reference)" Condition="$(CsWinRTEnabled)">
+
+  <!-- Remove WinRT.Host.dll and WinRT.Host.Shim.dll references -->
+  <Target Name="CsWinRTRemoveHostingDllReferences" AfterTargets="ResolvePackageAssets" BeforeTargets="ResolveLockFileAnalyzers" Outputs="@(Reference)">
+    <PropertyGroup>
+      <CsWinRTPkg-Net5Dir>$(CsWinRTPath)lib\net5.0</CsWinRTPkg-Net5Dir>
+      <CsWinRTPkg-NativeDir>$(CsWinRTPath)runtimes\**\native</CsWinRTPkg-NativeDir>
+    </PropertyGroup>
     <ItemGroup>
-      <Reference Remove="Windows"/>
+     <ReferenceCopyLocalPaths        Remove="$(CsWinRTPkg-NativeDir)\WinRT.Host.dll"/>
+     <RuntimeCopyLocalItems          Remove="$(CsWinRTPkg-NativeDir)\WinRT.Host.dll"/>
+     <RuntimeTargetsCopyLocalItems   Remove="$(CsWinRTPkg-NativeDir)\WinRT.Host.dll"/>
+     <Reference                      Remove="$(CsWinRTPkg-Net5Dir)\WinRT.Host.Shim.dll"/>
+     <ResolvedCompileFileDefinitions Remove="$(CsWinRTPkg-Net5Dir)\WinRT.Host.Shim.dll"/>
+     <RuntimeCopyLocalItems          Remove="$(CsWinRTPkg-Net5Dir)\WinRT.Host.Shim.dll"/>
     </ItemGroup>
+  </Target>
+
+  <!-- Remove Windows.Winmd reference to prevent compile collisions-->
+  <Target Name="CsWinRTRemoveWindowsReference" Outputs="@(Reference)" Condition="$(CsWinRTEnabled)">
+   <ItemGroup>
+     <Reference Remove="Windows"/>
+   </ItemGroup>
   </Target>
 
   <Target Name="CsWinRTRemoveWinMDReferences" BeforeTargets="BeforeCompile" AfterTargets="ResolveReferences">
@@ -52,7 +71,7 @@ Copyright (C) Microsoft Corporation. All rights reserved.
   <Target Name="CsWinRTGenerateProjection" DependsOnTargets="CsWinRTPrepareProjection;CsWinRTRemoveWinMDReferences" Condition="'$(CsWinRTGenerateProjection)' == 'true'">
     <PropertyGroup>
       <CsWinRTResponseFile>$(CsWinRTGeneratedFilesDir)cswinrt.rsp</CsWinRTResponseFile>
-      <CsWinRTCommand>$(CsWinRTExe) %40"$(CsWinRTResponseFile)"</CsWinRTCommand>
+	  <CsWinRTCommand>"$(CsWinRTExe)" %40"$(CsWinRTResponseFile)"</CsWinRTCommand>
       <CsWinRTWindowsMetadata Condition="'$(CsWinRTWindowsMetadata)' == ''">$(WindowsSDKVersion.TrimEnd('\'))</CsWinRTWindowsMetadata>
       <CsWinRTWindowsMetadataInput Condition="'$(CsWinRTWindowsMetadata)' != ''">-input $(CsWinRTWindowsMetadata)</CsWinRTWindowsMetadataInput>
     </PropertyGroup>
@@ -100,10 +119,27 @@ $(CsWinRTFilters)
     <CompilerVisibleProperty Include="AssemblyVersion" />
     <CompilerVisibleProperty Include="CsWinRTComponent" />
     <CompilerVisibleProperty Include="CsWinRTEnableLogging" />
-    <CompilerVisibleProperty Include="GeneratedFilesDir" />
+    <CompilerVisibleProperty Include="CsWinRTGeneratedFilesDir" />
     <CompilerVisibleProperty Include="CsWinRTExe" />
+    <CompilerVisibleProperty Include="CsWinRTKeepGeneratedSources" />
+    <CompilerVisibleProperty Include="CsWinRTWindowsMetadata" />
+    <CompilerVisibleProperty Include="CsWinRTGenerateProjection" />
+    <CompilerVisibleProperty Include="CsWinRTAuthoringInputs" />
   </ItemGroup>
 
+  <!-- Note this runs before the msbuild editor config file is generated because that is what is used to pass properties to the source generator. -->
+  <Target Name="CsWinRTSetAuthoringWinMDs" BeforeTargets="GenerateMSBuildEditorConfigFile;GenerateMSBuildEditorConfigFileCore" DependsOnTargets="CsWinRTRemoveWinMDReferences;GetAssemblyVersion;CsWinRTPrepareProjection" Condition="$(CsWinRTEnabled) And '$(CsWinRTComponent)' == 'true'">
+    <PropertyGroup>
+      <CsWinRTAuthoringInputs>$(CsWinRTAuthoringInputs) @(CsWinRTInputs->'"%(FullPath)"', ' ') @(CsWinRTAuthoringWinMDs->'"%(FullPath)"', ' ')</CsWinRTAuthoringInputs>
+    </PropertyGroup>
+  </Target>
+
+  <!-- Copy Authored winmd to output folder -->
+  <Target Name="CsWinRTPlaceWinMDInOutputFolder" Condition="'$(CsWinRTComponent)' == 'true'" BeforeTargets="AfterBuild">
+    <Copy SourceFiles="$(CsWinRTGeneratedFilesDir)\$(AssemblyName).winmd" DestinationFolder="$(TargetDir)" UseHardlinksIfPossible="false" SkipUnchangedFiles="true" />
+  </Target>
+
   <Import Project="$(MSBuildThisFileDirectory)Microsoft.Windows.CsWinRT.Prerelease.targets" Condition="Exists('$(MSBuildThisFileDirectory)Microsoft.Windows.CsWinRT.Prerelease.targets')"/>
+  <Import Project="$(MSBuildThisFileDirectory)Microsoft.Windows.CsWinRT.Authoring.targets" Condition="'$(CsWinRTComponent)' == 'true'"/>
 
 </Project>
