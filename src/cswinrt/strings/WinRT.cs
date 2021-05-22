@@ -16,10 +16,6 @@ using System.Linq.Expressions;
 #pragma warning disable 0649 // Field 'xxx' is never assigned to, and will always have its default value
 #pragma warning disable CA1060
 
-#if !NETSTANDARD2_0
-[assembly: global::System.Runtime.Versioning.SupportedOSPlatform("Windows")]
-#endif
-
 namespace WinRT
 {
     using System.Diagnostics;
@@ -237,7 +233,6 @@ namespace WinRT
         {
             // TODO: "using var" with ref struct and remove the try/catch below
             var m = MarshalString.CreateMarshaler(runtimeClassId);
-            Func<bool> dispose = () => { m.Dispose(); return false; };
             try
             {
                 IntPtr instancePtr;
@@ -245,10 +240,9 @@ namespace WinRT
                 (instancePtr, hr) = GetActivationFactory(MarshalString.GetAbi(m));
                 return (hr == 0 ? ObjectReference<IActivationFactoryVftbl>.Attach(ref instancePtr) : null, hr);
             }
-            catch (Exception) when (dispose())
+            finally
             {
-                // Will never execute
-                return default;
+                m.Dispose();
             }
         }
         

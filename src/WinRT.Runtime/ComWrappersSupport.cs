@@ -95,16 +95,23 @@ namespace WinRT
             var entries = new List<ComInterfaceEntry>();
             var objType = type.GetRuntimeClassCCWType() ?? type;
             var interfaces = objType.GetInterfaces();
+            bool hasCustomIMarshalInterface = false;
             foreach (var iface in interfaces)
             {
                 if (Projections.IsTypeWindowsRuntimeType(iface))
                 {
                     var ifaceAbiType = iface.FindHelperType();
+                    Guid iid = GuidGenerator.GetIID(ifaceAbiType);
                     entries.Add(new ComInterfaceEntry
                     {
-                        IID = GuidGenerator.GetIID(ifaceAbiType),
+                        IID = iid,
                         Vtable = (IntPtr)ifaceAbiType.GetAbiToProjectionVftblPtr()
                     });
+
+                    if(!hasCustomIMarshalInterface && iid == typeof(ABI.WinRT.Interop.IMarshal.Vftbl).GUID)
+                    {
+                        hasCustomIMarshalInterface = true;
+                    }
                 }
 
                 if (iface.IsConstructedGenericType
@@ -172,6 +179,17 @@ namespace WinRT
                 IID = typeof(ABI.WinRT.Interop.IWeakReferenceSource.Vftbl).GUID,
                 Vtable = ABI.WinRT.Interop.IWeakReferenceSource.Vftbl.AbiToProjectionVftablePtr
             });
+
+            // Add IMarhal implemented using the free threaded marshaler
+            // to all CCWs if it doesn't already have its own.
+            if (!hasCustomIMarshalInterface)
+            {
+                entries.Add(new ComInterfaceEntry
+                {
+                    IID = typeof(ABI.WinRT.Interop.IMarshal.Vftbl).GUID,
+                    Vtable = ABI.WinRT.Interop.IMarshal.Vftbl.AbiToProjectionVftablePtr
+                });
+            }
 
             // Add IAgileObject to all CCWs
             entries.Add(new ComInterfaceEntry
@@ -264,13 +282,8 @@ namespace WinRT
                 return (IInspectable obj) => new ABI.System.Nullable<Type>(obj.ObjRef);
             }
 
-            Type implementationType = null;
-
-            try
-            {
-                (implementationType, _) = TypeNameSupport.FindTypeByName(runtimeClassName.AsSpan());
-            }
-            catch (TypeLoadException)
+            Type implementationType = TypeNameSupport.FindTypeByNameCached(runtimeClassName);
+            if(implementationType == null)
             {
                 // If we reach here, then we couldn't find a type that matches the runtime class name.
                 // Fall back to using IInspectable directly.
@@ -318,13 +331,7 @@ namespace WinRT
                 Type implementationType = null;
                 if (!string.IsNullOrEmpty(runtimeClassName))
                 {
-                    try
-                    {
-                        (implementationType, _) = TypeNameSupport.FindTypeByName(runtimeClassName.AsSpan());
-                    }
-                    catch (TypeLoadException)
-                    {
-                    }
+                    implementationType = TypeNameSupport.FindTypeByNameCached(runtimeClassName);
                 }
 
                 if (!(implementationType != null &&
@@ -343,15 +350,20 @@ namespace WinRT
         {
             static bool IsWindowsRuntimeType(Type type)
             {
-                if (type.GetCustomAttribute<WindowsRuntimeTypeAttribute>() is object)
+                if ((type.GetCustomAttribute<WindowsRuntimeTypeAttribute>() is object) ||
+                    WinRT.Projections.IsTypeWindowsRuntimeType(type))
                     return true;
                 type = type.GetAuthoringMetadataType();
-                if (type is object && type.GetCustomAttribute<WindowsRuntimeTypeAttribute>() is object)
-                    return true;
+                if (type is object)
+                {
+                    if ((type.GetCustomAttribute<WindowsRuntimeTypeAttribute>() is object) ||
+                        WinRT.Projections.IsTypeWindowsRuntimeType(type))
+                        return true;
+                }
                 return false;
             }
 
-            if (type == typeof(string) || type == typeof(Type))
+            if (type == typeof(string) || type.IsTypeOfType())
                 return true;
             if (type.IsDelegate())
                 return IsWindowsRuntimeType(type);
@@ -497,7 +509,7 @@ namespace WinRT
                     Vtable = BoxedValueIReferenceImpl<object>.AbiToProjectionVftablePtr
                 };
             }
-            if (type == typeof(Type))
+            if (type.IsTypeOfType())
             {
                 return new ComInterfaceEntry
                 {
@@ -650,7 +662,7 @@ namespace WinRT
                     Vtable = BoxedArrayIReferenceArrayImpl<object>.AbiToProjectionVftablePtr
                 };
             }
-            if (type == typeof(Type))
+            if (type.IsTypeOfType())
             {
                 return new ComInterfaceEntry
                 {

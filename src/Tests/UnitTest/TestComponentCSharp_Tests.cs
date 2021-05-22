@@ -9,6 +9,7 @@ using WinRT;
 
 using Windows.Foundation;
 using Windows.UI;
+using Windows.Security.Credentials.UI;
 using Windows.Storage;
 using Windows.Storage.Streams;
 using Microsoft.UI.Xaml;
@@ -1094,8 +1095,8 @@ namespace UnitTest
 
             // IInspectable-based (projected) interop interface
             var interop = Windows.Security.Credentials.UI.UserConsentVerifier.As<IUserConsentVerifierInterop>();
-            var guid = GuidGenerator.CreateIID(typeof(Windows.Foundation.IAsyncOperation<Windows.Security.Credentials.UI.UserConsentVerificationResult>));
-            var operation = interop.RequestVerificationForWindowAsync(0, "message", guid);
+            var guid = GuidGenerator.CreateIID(typeof(IAsyncOperation<UserConsentVerificationResult>));
+            var operation = (IAsyncOperation<UserConsentVerificationResult>)interop.RequestVerificationForWindowAsync(0, "message", guid);
             Assert.NotNull(operation);
         }
 
@@ -1313,6 +1314,59 @@ namespace UnitTest
             TestObject.CopyProperties(managedProperties);
             Assert.Equal(managedProperties.ReadWriteProperty, TestObject.ReadWriteProperty);
         }
+
+        [Fact]
+        public void TestCCWMarshaler()
+        {
+            Guid IID_IMarshal = new Guid("00000003-0000-0000-c000-000000000046");
+            var managedProperties = new ManagedProperties(42);
+            IObjectReference ccw = MarshalInterface<IProperties1>.CreateMarshaler(managedProperties);
+            ccw.TryAs<IUnknownVftbl>(IID_IMarshal, out var marshalCCW);
+            Assert.NotNull(marshalCCW);
+
+            var array = new byte[] { 0x01 };
+            var buff = array.AsBuffer();
+            IObjectReference ccw2 = MarshalInterface<IBuffer>.CreateMarshaler(buff);
+            ccw2.TryAs<IUnknownVftbl>(IID_IMarshal, out var marshalCCW2);
+            Assert.NotNull(marshalCCW2);
+        }
+
+#if !NETCOREAPP2_0
+        [Fact]
+        public void TestDelegateCCWMarshaler()
+        {
+            CreateAndValidateStreamedFile().Wait();
+        }
+
+        private async Task CreateAndValidateStreamedFile()
+        {
+            var storageFile = await StorageFile.CreateStreamedFileAsync("CreateAndValidateStreamedFile.txt", StreamedFileWriter, null);
+            using var inputStream = await storageFile.OpenSequentialReadAsync();
+            using var stream = inputStream.AsStreamForRead();
+            byte[] buff = new byte[50];
+            var numRead = stream.Read(buff, 0, 50);
+            Assert.True(numRead > 0);
+            var result = System.Text.Encoding.Default.GetString(buff, 0, numRead).TrimEnd(null);
+            Assert.Equal("Success!", result);
+        }
+
+        private static async void StreamedFileWriter(StreamedFileDataRequest request)
+        {
+            try
+            {
+                using (var stream = request.AsStreamForWrite())
+                using (var streamWriter = new StreamWriter(stream))
+                {
+                    await streamWriter.WriteLineAsync("Success!");
+                }
+                request.Dispose();
+            }
+            catch (Exception)
+            {
+                request.FailAndClose(StreamedFileFailureMode.Incomplete);
+            }
+        }
+#endif
 
         [Fact]
         public void TestWeakReference()
@@ -1915,6 +1969,15 @@ namespace UnitTest
         }
 
         [Fact]
+        public void TestDateTimeMappingNegative()
+        {
+            var time = new DateTimeOffset(1501, 1, 1, 0, 0, 0, TimeSpan.Zero);
+            TestObject.DateTimeProperty = time;
+            Assert.Equal(time, TestObject.DateTimeProperty);
+            Assert.Equal(time, TestObject.GetDateTimeProperty().Value);
+        }
+
+        [Fact]
         public void TestExceptionMapping()
         {
             var ex = new ArgumentOutOfRangeException();
@@ -2294,6 +2357,28 @@ namespace UnitTest
             };
             TestObject.IterableOfObjectIterablesProperty = listOfListOfUris;
             Assert.True(TestObject.IterableOfObjectIterablesProperty.SequenceEqual(listOfListOfUris));
+        }
+
+        [Fact]
+        public void TestStaticEventWithGC()
+        {
+            bool eventCalled = false;
+            void Class_StaticIntPropertyChanged(object sender, int e)
+            {
+                eventCalled = (e == 3);
+            }
+
+            Class.StaticIntPropertyChanged += Class_StaticIntPropertyChanged;
+            GC.Collect(2, GCCollectionMode.Forced, true);
+            GC.WaitForPendingFinalizers();
+            Class.StaticIntPropertyChanged -= Class_StaticIntPropertyChanged;
+            Class.StaticIntProperty = 3;
+            Assert.False(eventCalled);
+            Class.StaticIntPropertyChanged += Class_StaticIntPropertyChanged;
+            GC.Collect(2, GCCollectionMode.Forced, true);
+            GC.WaitForPendingFinalizers();
+            Class.StaticIntProperty = 3;
+            Assert.True(eventCalled);
         }
 
 #if NET5_0

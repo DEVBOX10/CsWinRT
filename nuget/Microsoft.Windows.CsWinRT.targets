@@ -73,6 +73,7 @@ Copyright (C) Microsoft Corporation. All rights reserved.
       <CsWinRTResponseFile>$(CsWinRTGeneratedFilesDir)cswinrt.rsp</CsWinRTResponseFile>
 	  <CsWinRTCommand>"$(CsWinRTExe)" %40"$(CsWinRTResponseFile)"</CsWinRTCommand>
       <CsWinRTWindowsMetadata Condition="'$(CsWinRTWindowsMetadata)' == ''">$(WindowsSDKVersion.TrimEnd('\'))</CsWinRTWindowsMetadata>
+      <CsWinRTWindowsMetadata Condition="'$(CsWinRTWindowsMetadata)' == ''">$(TargetPlatformVersion)</CsWinRTWindowsMetadata>
       <CsWinRTWindowsMetadataInput Condition="'$(CsWinRTWindowsMetadata)' != ''">-input $(CsWinRTWindowsMetadata)</CsWinRTWindowsMetadataInput>
     </PropertyGroup>
     <ItemGroup>
@@ -106,6 +107,13 @@ $(CsWinRTFilters)
     <WriteLinesToFile File="$(CsWinRTResponseFile)" Lines="$(CsWinRTParams)" Overwrite="true" WriteOnlyWhenDifferent="true" />
     <Message Text="$(CsWinRTCommand)" Importance="$(CsWinRTMessageImportance)" />
     <Exec Command="$(CsWinRTCommand)" />
+    <ItemGroup>
+      <CsWinRTOutputs Include="$(CsWinRTGeneratedFilesDir)/*.cs"/>
+      <UpToDateCheckInput Include="@(CsWinRTInputs)" Set="CsWinRTInputs" />
+      <UpToDateCheckOutput Include="$(CsWinRTResponseFile)" Set="CsWinRTInputs" />
+      <UpToDateCheckInput Include="$(CsWinRTResponseFile)" Set="CsWinRTOutputs" />
+      <UpToDateCheckOutput Include="@(CsWinRTOutputs)" Set="CsWinRTOutputs" />
+    </ItemGroup>
   </Target>
   
   <Target Name="CsWinRTIncludeProjection" BeforeTargets="BeforeCompile" DependsOnTargets="CsWinRTGenerateProjection" Condition="$(CsWinRTEnabled)">

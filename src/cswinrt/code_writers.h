@@ -1407,6 +1407,7 @@ remove => %.% -= value;
     void write_custom_attributes(writer& w, std::pair<CustomAttribute, CustomAttribute> const& custom_attributes, bool enable_platform_attrib)
     {
         std::map<std::string, std::vector<std::string>> attributes;
+        bool allow_multiple = false;
         for (auto&& attribute : custom_attributes)
         {
             auto [attribute_namespace, attribute_name] = attribute.TypeNamespaceAndName();
@@ -1426,13 +1427,23 @@ remove => %.% -= value;
                     attributes["global::System.Runtime.Versioning.SupportedOSPlatform"].push_back(platform);
                 }
             }
-            // Skip metadata attributes
-            if (attribute_namespace == "Windows.Foundation.Metadata" && attribute_name != "DefaultOverload" && attribute_name != "Overload") continue;
+            // Skip metadata attributes without a projection
+            if (attribute_namespace == "Windows.Foundation.Metadata")
+            {
+                if (attribute_name == "AllowMultiple")
+                {
+                    allow_multiple = true;
+                }
+                if (attribute_name != "DefaultOverload" && attribute_name != "Overload" && 
+                    attribute_name != "AttributeUsage" && attribute_name != "ContractVersion")
+                {
+                    continue;
+                }
+            }
             attributes[attribute_full] = std::move(params);
         }
         if (auto&& usage = attributes.find("AttributeUsage"); usage != attributes.end())
         {
-            bool allow_multiple = attributes.find("Windows.Foundation.Metadata.AllowMultiple") != attributes.end();
             usage->second.push_back(w.write_temp("AllowMultiple = %", allow_multiple ? "true" : "false"));
         }
 
@@ -1545,9 +1556,29 @@ remove => %.% -= value;
 
     std::string write_static_cache_object(writer& w, std::string_view cache_type_name, TypeDef const& class_type)
     {
-        if (settings.netstandard_compat)
+        bool hasStaticEvent = false;
+        for (auto&& evt : class_type.EventList())
         {
-            
+            auto [add, _] = get_event_methods(evt);
+            if (add.Flags().Static())
+            {
+                hasStaticEvent = true;
+                break;
+            }
+        }
+
+        auto instance = hasStaticEvent ?
+            w.write_temp(
+                "private static readonly _% _instance = new _%();",
+                cache_type_name,
+                cache_type_name) :
+            w.write_temp(
+                "private static readonly WeakLazy<_%> _instance = new WeakLazy<_%>();",
+                cache_type_name,
+                cache_type_name);
+
+        if (settings.netstandard_compat)
+        {            
         auto cache_vftbl_type = w.write_temp("ABI.%.%.Vftbl",
                 class_type.TypeNamespace(),
                 cache_type_name);
@@ -1562,8 +1593,8 @@ remove => %.% -= value;
 internal class _% : ABI.%.%
 {
 public _%() : base(%()) { }
-private static WeakLazy<_%> _instance = new WeakLazy<_%>();
-internal static % Instance => _instance.Value;
+%
+internal static % Instance => %;
 }
 )",
                 cache_type_name,
@@ -1571,9 +1602,9 @@ internal static % Instance => _instance.Value;
                 cache_type_name,
                 cache_type_name,
                 cache_interface,
+                instance,
                 cache_type_name,
-                cache_type_name,
-                cache_type_name);
+                hasStaticEvent ? "_instance" : "_instance.Value");
         }
         else
         {
@@ -1586,8 +1617,8 @@ public _%()
 _obj = (new BaseActivationFactory("%", "%.%"))._As(GuidGenerator.GetIID(typeof(%.%).GetHelperType()));
 }
 
-private static WeakLazy<_%> _instance = new WeakLazy<_%>();
-internal static % Instance => (%)_instance.Value;
+%
+internal static % Instance => (%)%;
 
 IObjectReference IWinRTObject.NativeObject => _obj;
 bool IWinRTObject.HasUnwrappableNativeObject => false;
@@ -1602,10 +1633,10 @@ global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, ob
                 class_type.TypeName(),
                 class_type.TypeNamespace(),
                 cache_type_name,
+                instance,
                 cache_type_name,
                 cache_type_name,
-                cache_type_name,
-                cache_type_name);
+                hasStaticEvent ? "_instance" : "_instance.Value");
         }
 
         return w.write_temp("_%.Instance", cache_type_name);
@@ -1640,7 +1671,8 @@ MarshalInspectable<object>.DisposeAbi(ptr);
 }
 }))())
 {
-    ComWrappersSupport.RegisterObjectForInterface(this, ThisPtr);
+ComWrappersSupport.RegisterObjectForInterface(this, ThisPtr);
+%
 }
 )",
                     platform_attribute, 
@@ -1650,7 +1682,8 @@ MarshalInspectable<object>.DisposeAbi(ptr);
                     cache_object,
                     method.Name(),
                     bind_list<write_parameter_name_with_modifier>(", ", signature.params()),
-                    settings.netstandard_compat ? "new " + default_interface_name : "");
+                    settings.netstandard_compat ? "new " + default_interface_name : "",
+                    settings.netstandard_compat ? "" : "ComWrappersHelper.Init(_inner, false);");
             }
         }
         else
@@ -1659,11 +1692,13 @@ MarshalInspectable<object>.DisposeAbi(ptr);
 public %() : this(%(ActivationFactory<%>.ActivateInstance<IUnknownVftbl>()))
 {
 ComWrappersSupport.RegisterObjectForInterface(this, ThisPtr);
+%
 }
 )",
                 class_type.TypeName(),
                 settings.netstandard_compat ? "new " + default_interface_name : "",
-                class_type.TypeName());
+                class_type.TypeName(),
+                settings.netstandard_compat ? "" : "ComWrappersHelper.Init(_inner, false);");
         }
     }
 
@@ -1726,23 +1761,20 @@ MarshalInspectable<object>.DisposeAbi(ptr);
                 w.write(R"(
 %% %(%)%
 {
-object baseInspectable = this.GetType() != typeof(%) ? this : null;
-IntPtr composed = %.%(%%baseInspectable, out IntPtr ptr);
-using IObjectReference composedRef = ObjectReference<IUnknownVftbl>.Attach(ref composed);
+bool isAggregation = this.GetType() != typeof(%);
+object baseInspectable = isAggregation ? this : null;
+IntPtr composed = %.%(%%baseInspectable, out IntPtr inner);
 try
 {
-_inner = ComWrappersSupport.GetObjectReferenceForInterface(ptr);
-if(baseInspectable == null) _inner = _inner.As(GuidGenerator.GetIID(typeof(%).GetHelperType()));
+ComWrappersHelper.Init(isAggregation, this, composed, inner, out _inner);
 _defaultLazy = new Lazy<%>(() => (%)new SingleInterfaceOptimizedObject(typeof(%), _inner));
 _lazyInterfaces = new Dictionary<Type, object>()
 {%
 };
-
-ComWrappersSupport.RegisterObjectForInterface(this, ThisPtr);
 }
 finally
 {
-MarshalInspectable<object>.DisposeAbi(ptr);
+Marshal.Release(inner);   
 }
 }
 )",
@@ -1756,7 +1788,6 @@ MarshalInspectable<object>.DisposeAbi(ptr);
                     method.Name(),
                     bind_list<write_parameter_name_with_modifier>(", ", params_without_objects),
                     [&](writer& w) {w.write("%", params_without_objects.empty() ? " " : ", "); },
-                    default_interface_name,
                     default_interface_name,
                     default_interface_name,
                     default_interface_name,
@@ -4408,7 +4439,7 @@ private static unsafe int Do_Abi_%%
 try
 {
 var __this = global::WinRT.ComWrappersSupport.FindObject<%>(thisPtr);
-if(_%_TokenTables.TryGetValue(__this, out var __table) && __table.RemoveEventHandler(%, out var __handler))
+if(__this != null && _%_TokenTables.TryGetValue(__this, out var __table) && __table.RemoveEventHandler(%, out var __handler))
 {
 __this.% -= __handler;
 }
@@ -4714,7 +4745,7 @@ IInspectableVftbl = global::WinRT.IInspectable.Vftbl.AbiToProjectionVftable,
         if (!std::holds_alternative<object_type>(type))
         {
             w.write(R"(
-    : base(objRef)
+    : base(global::WinRT.DerivedComposed.Instance)
 )");
         }
     }

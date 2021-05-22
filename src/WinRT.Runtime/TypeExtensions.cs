@@ -1,35 +1,38 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
+using System.Collections.Concurrent;
 using System.Reflection;
-using System.Text;
 
 namespace WinRT
 {
 
     public static class TypeExtensions
     {
+        private readonly static ConcurrentDictionary<Type, Type> HelperTypeCache = new ConcurrentDictionary<Type, Type>();
+
         public static Type FindHelperType(this Type type)
         {
-            if (typeof(Exception).IsAssignableFrom(type))
+            return HelperTypeCache.GetOrAdd(type, (type) =>
             {
-                type = typeof(Exception);
-            }
-            Type customMapping = Projections.FindCustomHelperTypeMapping(type);
-            if (customMapping is object)
-            {
-                return customMapping;
-            }
+                if (typeof(Exception).IsAssignableFrom(type))
+                {
+                    type = typeof(Exception);
+                }
+                Type customMapping = Projections.FindCustomHelperTypeMapping(type);
+                if (customMapping is object)
+                {
+                    return customMapping;
+                }
 
-            string fullTypeName = type.FullName;
-            string ccwTypePrefix = "ABI.Impl.";
-            if (fullTypeName.StartsWith(ccwTypePrefix))
-            {
-                fullTypeName = fullTypeName.Substring(ccwTypePrefix.Length);
-            }
+                string fullTypeName = type.FullName;
+                string ccwTypePrefix = "ABI.Impl.";
+                if (fullTypeName.StartsWith(ccwTypePrefix))
+                {
+                    fullTypeName = fullTypeName.Substring(ccwTypePrefix.Length);
+                }
 
-            var helper = $"ABI.{fullTypeName}";
-            return Type.GetType(helper) ?? type.Assembly.GetType(helper);
+                var helper = $"ABI.{fullTypeName}";
+                return Type.GetType(helper) ?? type.Assembly.GetType(helper);
+            });
         }
 
         public static Type GetHelperType(this Type type)
@@ -84,9 +87,14 @@ namespace WinRT
             return typeof(Delegate).IsAssignableFrom(type);
         }
 
+        internal static bool IsTypeOfType(this Type type)
+        {
+            return typeof(Type).IsAssignableFrom(type);
+        }
+
         public static Type GetRuntimeClassCCWType(this Type type)
         {
-            return type.IsClass ? type.GetAuthoringMetadataType() : null;
+            return type.IsClass && !type.IsArray ? type.GetAuthoringMetadataType() : null;
         }
 
         internal static Type GetAuthoringMetadataType(this Type type)
