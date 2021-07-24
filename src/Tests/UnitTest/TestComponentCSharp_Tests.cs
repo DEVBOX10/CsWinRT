@@ -29,13 +29,13 @@ using Windows.Security.Cryptography;
 using Windows.Security.Cryptography.Core;
 using System.Reflection;
 
-#if NET5_0
+#if NET
 using WeakRefNS = System;
 #else
 using WeakRefNS = WinRT;
 #endif
 
-#if NET5_0
+#if NET
 // Test SupportedOSPlatform warnings for APIs targeting 10.0.19041.0:
 [assembly: global::System.Runtime.Versioning.SupportedOSPlatform("Windows10.0.18362.0")]
 #endif
@@ -49,6 +49,20 @@ namespace UnitTest
         public TestCSharp()
         {
             TestObject = new Class();
+        }
+
+
+        // Test a fix for a bug in Mono.Cecil that was affecting the IIDOptimizer when it encountered long class names 
+        [Fact]
+        public void TestLongClassNameEventSource()
+        {
+            bool flag = false;
+            var long_class_name = new ABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz();
+            long_class_name.EventForAVeryLongClassName +=
+                (ABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz sender, ABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz args)
+                => flag = true;
+            long_class_name.InvokeEvent();
+            Assert.True(flag);
         }
 
         [Fact]
@@ -389,7 +403,7 @@ namespace UnitTest
             Assert.True(LookupPorts().Wait(5000));
         }
 
-#if NET5_0
+#if NET
         async Task InvokeStreamWriteZeroBytes()
         {
             var random = new Random(42);
@@ -701,6 +715,15 @@ namespace UnitTest
             };
             TestObject.RaiseDataErrorChanged();
             Assert.Equal("name", propertyName);
+
+            bool eventCalled = false;
+            TestObject.CanExecuteChanged += (object sender, EventArgs e) =>
+            {
+                eventCalled = true;
+            };
+
+            TestObject.RaiseCanExecuteChanged();
+            Assert.True(eventCalled);
 
             // IXamlServiceProvider <-> IServiceProvider
             var serviceProvider = Class.ServiceProvider.As<IServiceProviderInterop>();
@@ -2438,15 +2461,44 @@ namespace UnitTest
             Assert.True(TestObject.IterableOfObjectIterablesProperty.SequenceEqual(listOfListOfUris));
         }
 
+        (System.WeakReference<Class>, System.WeakReference<EventHandlerClass>) TestEventDelegateCleanup()
+        {
+            // Both WinRT object and handler class alive.
+            var eventCalled = false;
+            var eventHandlerClass = new EventHandlerClass(() => eventCalled = true);
+            var classInstance = new Class();
+            classInstance.IntPropertyChanged += eventHandlerClass.IntPropertyChanged;
+            GC.Collect(2, GCCollectionMode.Forced, true);
+            GC.WaitForPendingFinalizers();
+            classInstance.IntProperty = 3;
+            Assert.True(eventCalled);
+
+            // No strong reference to handler class, but delegate is still registered on
+            // the WinRT object keeping it alive.
+            eventCalled = false;
+            var weakEventHandlerClass = new System.WeakReference<EventHandlerClass>(eventHandlerClass);
+            eventHandlerClass = null;
+            GC.Collect(2, GCCollectionMode.Forced, true);
+            GC.WaitForPendingFinalizers();
+            classInstance.IntProperty = 3;
+            Assert.True(eventCalled);
+            Assert.True(weakEventHandlerClass.TryGetTarget(out var _));
+
+            // No strong reference to WinRT object.  It should no longer be alive
+            // and should also cause for the event handler class to be no longer alive.
+            var weakClassInstance = new System.WeakReference<Class>(classInstance);
+            classInstance = null;
+            return (weakClassInstance, weakEventHandlerClass);
+        }
+
+        // Ensure that event subscription state is properly cached to enable later unsubscribes
         [Fact]
-        public void TestStaticEventWithGC()
+        public void TestEventSourceCaching()
         {
             bool eventCalled = false;
-            void Class_StaticIntPropertyChanged(object sender, int e)
-            {
-                eventCalled = (e == 3);
-            }
+            void Class_StaticIntPropertyChanged(object sender, int e) => eventCalled = (e == 3);
 
+            // Test static codegen-based EventSource caching
             Class.StaticIntPropertyChanged += Class_StaticIntPropertyChanged;
             GC.Collect(2, GCCollectionMode.Forced, true);
             GC.WaitForPendingFinalizers();
@@ -2458,9 +2510,50 @@ namespace UnitTest
             GC.WaitForPendingFinalizers();
             Class.StaticIntProperty = 3;
             Assert.True(eventCalled);
+
+            // Test dynamic WeakRef-based EventSource caching
+            eventCalled = false;
+            static void Subscribe(EventHandler<int> handler) => Singleton.Instance.IntPropertyChanged += handler;
+            static void Unsubscribe(EventHandler<int> handler) => Singleton.Instance.IntPropertyChanged -= handler;
+            static void Assign(int value) => Singleton.Instance.IntProperty = value;
+            Subscribe(Class_StaticIntPropertyChanged);
+            GC.Collect(2, GCCollectionMode.Forced, true);
+            GC.WaitForPendingFinalizers();
+            Unsubscribe(Class_StaticIntPropertyChanged);
+            Assign(3);
+            Assert.False(eventCalled);
+            Subscribe(Class_StaticIntPropertyChanged);
+            GC.Collect(2, GCCollectionMode.Forced, true);
+            GC.WaitForPendingFinalizers();
+            Assign(3);
+            Assert.True(eventCalled);
+
+            // Test that event delegates don't leak when not unsubscribed.
+            // Test runs into a different function as the finalizer wasn't
+            // getting triggered otherwise with a weak reference.
+            (System.WeakReference<Class> weakClassInstance, System.WeakReference<EventHandlerClass> weakEventHandlerClass) =
+                TestEventDelegateCleanup();
+            GC.Collect(2, GCCollectionMode.Forced, true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, true);
+            GC.WaitForPendingFinalizers();
+            Assert.False(weakClassInstance.TryGetTarget(out _));
+            Assert.False(weakEventHandlerClass.TryGetTarget(out _));
         }
 
-#if NET5_0
+        class EventHandlerClass
+        {
+            private readonly Action eventCalled;
+
+            public EventHandlerClass(Action eventCalled)
+            {
+                this.eventCalled = eventCalled;
+            }
+
+            public void IntPropertyChanged(object sender, int e) => eventCalled();
+        }
+
+#if NET
         [TestComponentCSharp.Warning]  // NO warning CA1416
         class WarningManaged { };
 

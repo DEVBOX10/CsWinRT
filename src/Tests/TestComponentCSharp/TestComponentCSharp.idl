@@ -130,6 +130,17 @@ namespace TestComponentCSharp
         static Int32 NumObjects{ get; };
     }
 
+    interface ISingleton
+    {
+        Int32 IntProperty;
+        event Windows.Foundation.EventHandler<Int32> IntPropertyChanged;
+    }
+
+    static runtimeclass Singleton
+    {
+        static ISingleton Instance;
+    }
+
     [default_interface, gc_pressure(Windows.Foundation.Metadata.GCPressureAmount.High)]
     runtimeclass Class :
         Windows.Foundation.IStringable
@@ -138,6 +149,7 @@ namespace TestComponentCSharp
         , IProperties1
         , IProperties2
         , Microsoft.UI.Xaml.Data.INotifyDataErrorInfo
+        , Microsoft.UI.Xaml.Input.ICommand 
         //, Windows.Foundation.Collections.IVector<String>
         //, Windows.Foundation.Collections.IMap<Int32, String>
     {
@@ -298,6 +310,10 @@ namespace TestComponentCSharp
         Windows.Foundation.Collections.IVectorView<IProperties1> GetInterfaceVector();
         [noexcept] Windows.Foundation.Collections.IVectorView<Class> GetClassVector();
 
+        // Test IIDOptimizer
+        Windows.Foundation.Collections.IVectorView<Microsoft.UI.Xaml.Data.DataErrorsChangedEventArgs> GetEventArgsVector();
+        Windows.Foundation.Collections.IVectorView<ProvideUri> GetNonGenericDelegateVector();
+        
         Windows.Foundation.Collections.IIterable<Int32> GetIntIterable();
         void SetIntIterable(Windows.Foundation.Collections.IIterable<Int32> value);
 
@@ -386,11 +402,24 @@ namespace TestComponentCSharp
         // Interface projections
         static IProperties1 NativeProperties1{ get; };
         static Object ServiceProvider{ get; };
+        static Object ComInterop{ get; };
 
         // INotifyDataErrorInfo
         void RaiseDataErrorChanged();
 
+        // ICommand
+        void RaiseCanExecuteChanged();
+
         static Object BadRuntimeClassName{ get; };
+    }
+
+    runtimeclass ABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
+    {
+        ABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz();
+        
+        event Windows.Foundation.TypedEventHandler<ABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz, ABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz> EventForAVeryLongClassName;
+        
+        void InvokeEvent();
     }
 
     [threading(sta), marshaling_behavior(standard)]
@@ -453,7 +482,7 @@ namespace TestComponentCSharp
             static event Windows.Foundation.EventHandler<Int32> WarningEvent;
         }
     }
-
+    
     [contract(Windows.Foundation.UniversalApiContract, 8)]
     interface IWarning1
     {

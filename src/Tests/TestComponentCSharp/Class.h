@@ -266,6 +266,10 @@ namespace winrt::TestComponentCSharp::implementation
         Windows::Foundation::Collections::IVectorView<Windows::Foundation::IInspectable> GetObjectVector();
         Windows::Foundation::Collections::IVectorView<TestComponentCSharp::IProperties1> GetInterfaceVector();
         Windows::Foundation::Collections::IVectorView<TestComponentCSharp::Class> GetClassVector() noexcept;
+       
+        // Test IIDOptimizer -- testing the windows projection covers most code paths, and these two types exercise the rest.
+        Windows::Foundation::Collections::IVectorView<Microsoft::UI::Xaml::Data::DataErrorsChangedEventArgs> GetEventArgsVector();
+        Windows::Foundation::Collections::IVectorView<TestComponentCSharp::ProvideUri> GetNonGenericDelegateVector();
 
         Windows::Foundation::Collections::IIterable<int32_t> GetIntIterable();
         void SetIntIterable(Windows::Foundation::Collections::IIterable<int32_t> const& value);
@@ -367,6 +371,7 @@ namespace winrt::TestComponentCSharp::implementation
 
         static IProperties1 NativeProperties1();
         static Windows::Foundation::IInspectable ServiceProvider();
+        static winrt::Windows::Foundation::IInspectable ComInterop();
 
         // IStringable
         hstring ToString();
@@ -390,6 +395,13 @@ namespace winrt::TestComponentCSharp::implementation
         void ErrorsChanged(winrt::event_token const& token) noexcept;
         Windows::Foundation::Collections::IIterable<Windows::Foundation::IInspectable> GetErrors(hstring const& propertyName);
         void RaiseDataErrorChanged();
+
+        winrt::event<Windows::Foundation::EventHandler<Windows::Foundation::IInspectable>> _canExecuteChanged;
+        winrt::event_token CanExecuteChanged(Windows::Foundation::EventHandler<Windows::Foundation::IInspectable> const& handler);
+        void CanExecuteChanged(winrt::event_token const& token) noexcept;
+        bool CanExecute(Windows::Foundation::IInspectable const& parameter);
+        void Execute(Windows::Foundation::IInspectable const& parameter);
+        void RaiseCanExecuteChanged();
 
         static Windows::Foundation::IInspectable BadRuntimeClassName();
     };

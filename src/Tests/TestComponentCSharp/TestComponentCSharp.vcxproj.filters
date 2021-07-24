@@ -15,7 +15,9 @@
     <ClCompile Include="ManualProjectionTestClasses.cpp" />
     <ClCompile Include="WarningClass.cpp" />
     <ClCompile Include="WarningStatic.cpp" />
+    <ClCompile Include="Singleton.cpp" />
     <ClCompile Include="Windows.Class.cpp" />
+    <ClCompile Include="ABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h" />
@@ -24,7 +26,9 @@
     <ClInclude Include="ManualProjectionTestClasses.h" />
     <ClInclude Include="WarningStatic.h" />
     <ClInclude Include="WarningClass.h" />
+    <ClInclude Include="Singleton.h" />
     <ClInclude Include="Windows.Class.h" />
+    <ClInclude Include="ABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVQXYZabcdefghijklmnopqrstuvqxyzABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.h" />
   </ItemGroup>
   <ItemGroup>
     <Midl Include="TestComponentCSharp.idl" />
