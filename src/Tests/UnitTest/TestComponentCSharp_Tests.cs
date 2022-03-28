@@ -29,6 +29,7 @@ using Windows.Security.Cryptography;
 using Windows.Security.Cryptography.Core;
 using System.Reflection;
 using Windows.Devices.Enumeration.Pnp;
+using System.Diagnostics;
 
 #if NET
 using WeakRefNS = System;
@@ -851,6 +852,9 @@ namespace UnitTest
             {
                 Assert.Equal(stringMap[item.Key], item.Value);
             }
+            KeyValuePair<string, string>[] pairs = new KeyValuePair<string, string>[2];
+            stringMap.CopyTo(pairs, 0);
+            Assert.Equal(2, pairs.Length);
         }
 
         [Fact]
@@ -2150,6 +2154,12 @@ namespace UnitTest
 
             string s = "Hello World!";
             Assert.Equal(s, Class.UnboxString(s));
+
+            ProvideInt intHandler = () => 42;
+            Assert.Equal(intHandler, Class.UnboxDelegate(intHandler));
+
+            EnumValue enumValue = EnumValue.Two;
+            Assert.Equal(enumValue, Class.UnboxEnum(enumValue));
         }
 
         [Fact]
@@ -2219,6 +2229,23 @@ namespace UnitTest
             Assert.IsType<string>(str2);
             Assert.Equal(string.Empty, (string)str1);
             Assert.Equal(string.Empty, (string)str2);
+        }
+
+        [Fact]
+        public void TestDelegateUnboxing()
+        {
+            var del = Class.BoxedDelegate;
+            Assert.IsType<ProvideUri>(del);
+            var provideUriDel = (ProvideUri) del;
+            Assert.Equal(new Uri("http://microsoft.com"), provideUriDel());
+        }
+
+        [Fact]
+        public void TestEnumUnboxing()
+        {
+            var enumVal = Class.BoxedEnum;
+            Assert.IsType<EnumValue>(enumVal);
+            Assert.Equal(EnumValue.Two, enumVal);
         }
 
         internal class ManagedType { }
@@ -2662,6 +2689,42 @@ namespace UnitTest
             Assert.True(eventCalled);
             Assert.True(eventCalled2);
         }
+
+#if NET
+        [Fact]
+        public void TestProxiedDelegate()
+        {
+            var obj = new OOPAsyncAction();
+            var factory = new WinRTClassFactory<OOPAsyncAction>(
+                () => obj,
+                new Dictionary<Guid, Func<object, IntPtr>>()
+                {
+                    { typeof(IAsyncAction).GUID, obj => MarshalInterface<IAsyncAction>.FromManaged((IAsyncAction) obj) },
+                });
+
+            WinRTClassFactory<OOPAsyncAction>.RegisterClass<OOPAsyncAction>(factory);
+
+            var currentExecutingDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+#if NET
+            var launchExePath = $"{currentExecutingDir}\\OOPExe.exe";
+            var proc = Process.Start(launchExePath);
+#else
+            var launchExePath = $"{currentExecutingDir}\\OOPExe.dll";
+            var proc = Process.Start("dotnet.exe", launchExePath);
+#endif
+            Thread.Sleep(1000);
+            obj.Close();
+            Assert.True(obj.delegateCalled);
+
+            try
+            {
+                proc.Kill();
+            }
+            catch(Exception)
+            {
+            }
+        }
+#endif
 
         [Fact]
         private async Task TestPnpPropertiesInLoop()

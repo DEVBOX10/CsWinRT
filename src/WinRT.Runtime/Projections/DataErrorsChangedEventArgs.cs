@@ -39,7 +39,7 @@ namespace ABI.Microsoft.UI.Xaml.Data
 
         public static implicit operator WinRTDataErrorsChangedEventArgsRuntimeClassFactory(IObjectReference obj) => (obj != null) ? new WinRTDataErrorsChangedEventArgsRuntimeClassFactory(obj) : null;
         public static implicit operator WinRTDataErrorsChangedEventArgsRuntimeClassFactory(ObjectReference<Vftbl> obj) => (obj != null) ? new WinRTDataErrorsChangedEventArgsRuntimeClassFactory(obj) : null;
-        protected readonly ObjectReference<Vftbl> _obj;
+        private readonly ObjectReference<Vftbl> _obj;
         public IntPtr ThisPtr => _obj.ThisPtr;
         public ObjectReference<I> AsInterface<I>() => _obj.As<I>();
         public A As<A>() => _obj.AsType<A>();
@@ -64,6 +64,17 @@ namespace ABI.Microsoft.UI.Xaml.Data
             finally
             {
                 MarshalInspectable<object>.DisposeAbi(__retval);
+            }
+        }
+
+        public unsafe ObjectReferenceValue CreateInstanceForMarshaling(string name)
+        {
+            IntPtr __retval = default;
+            MarshalString.Pinnable __name = new(name);
+            fixed (void* ___name = __name)
+            {
+                global::WinRT.ExceptionHelpers.ThrowExceptionForHR(_obj.Vftbl.CreateInstance_0(ThisPtr, MarshalString.GetAbi(ref __name), &__retval));
+                return new ObjectReferenceValue(__retval);
             }
         }
     }
@@ -100,6 +111,16 @@ namespace ABI.System.ComponentModel
             return ActivationFactory.Instance.CreateInstance(value.PropertyName);
         }
 
+        public static ObjectReferenceValue CreateMarshaler2(global::System.ComponentModel.DataErrorsChangedEventArgs value)
+        {
+            if (value is null)
+            {
+                return new ObjectReferenceValue();
+            }
+
+            return ActivationFactory.Instance.CreateInstanceForMarshaling(value.PropertyName);
+        }
+
         public static IntPtr GetAbi(IObjectReference m) => m?.ThisPtr ?? IntPtr.Zero;
 
         public static global::System.ComponentModel.DataErrorsChangedEventArgs FromAbi(IntPtr ptr)
@@ -109,11 +130,10 @@ namespace ABI.System.ComponentModel
                 return null;
             }
 
-            using var args = ObjectReference<ABI.Microsoft.UI.Xaml.Data.IDataErrorsChangedEventArgsVftbl>.FromAbi(ptr);
             IntPtr propertyName = IntPtr.Zero;
             try
             {
-                ExceptionHelpers.ThrowExceptionForHR(args.Vftbl.get_PropertyName_0(args.ThisPtr, &propertyName));
+                ExceptionHelpers.ThrowExceptionForHR((**(ABI.Microsoft.UI.Xaml.Data.IDataErrorsChangedEventArgsVftbl**)ptr).get_PropertyName_0(ptr, &propertyName));
                 return new global::System.ComponentModel.DataErrorsChangedEventArgs(MarshalString.FromAbi(propertyName));
             }
             finally
@@ -124,8 +144,7 @@ namespace ABI.System.ComponentModel
 
         public static unsafe void CopyManaged(global::System.ComponentModel.DataErrorsChangedEventArgs o, IntPtr dest)
         {
-            using var objRef = CreateMarshaler(o);
-            *(IntPtr*)dest.ToPointer() = objRef?.GetRef() ?? IntPtr.Zero;
+            *(IntPtr*)dest.ToPointer() = CreateMarshaler2(o).Detach();
         }
 
         public static IntPtr FromManaged(global::System.ComponentModel.DataErrorsChangedEventArgs value)
@@ -134,8 +153,7 @@ namespace ABI.System.ComponentModel
             {
                 return IntPtr.Zero;
             }
-            using var objRef = CreateMarshaler(value);
-            return objRef.GetRef();
+            return CreateMarshaler2(value).Detach();
         }
 
         public static void DisposeMarshaler(IObjectReference m) { m?.Dispose(); }
