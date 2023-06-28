@@ -5,6 +5,7 @@
 #include "type_writers.h"
 #include "code_writers.h"
 #include <concurrent_unordered_map.h>
+#include <concurrent_unordered_set.h>
 
 namespace cswinrt
 {
@@ -32,10 +33,12 @@ namespace cswinrt
         { "output", 0, 1, "<path>", "Location of generated projection" },
         { "include", 0, option::no_max, "<prefix>", "One or more prefixes to include in projection" },
         { "exclude", 0, option::no_max, "<prefix>", "One or more prefixes to exclude from projection" },
-        { "target", 0, 1, "<net6.0|net5.0|netstandard2.0>", "Target TFM for projection. Omit for compatibility with newest TFM (net5.0)." },
+        { "target", 0, 1, "<net7.0|net6.0|netstandard2.0>", "Target TFM for projection. Omit for compatibility with newest TFM (net6.0)." },
         { "component", 0, 0, {}, "Generate component projection." },
         { "verbose", 0, 0, {}, "Show detailed progress information" },
-        { "embedded", 0, 0, {}, "Generate the projection as internal."},
+        { "internal", 0, 0, {}, "Generates a private projection."},
+        { "embedded", 0, 0, {}, "Generates an embedded projection."},
+        { "public_enums", 0, 0, {}, "Used with embedded option to generate enums as public"},
         { "help", 0, option::no_max, {}, "Show detailed help" },
         { "?", 0, option::no_max, {}, {} },
     };
@@ -88,13 +91,15 @@ Where <spec> is one or more of:
 
         settings.verbose = args.exists("verbose");
         auto target = args.value("target");
-        if (!target.empty() && target != "netstandard2.0" && !starts_with(target, "net5.0") && !starts_with(target, "net6.0"))
+        if (!target.empty() && target != "netstandard2.0" && !starts_with(target, "net5.0") && !starts_with(target, "net6.0") && !starts_with(target, "net7.0"))
         {
             throw usage_exception();
         }
         settings.netstandard_compat = target == "netstandard2.0";
         settings.component = args.exists("component");
+        settings.internal = args.exists("internal");
         settings.embedded = args.exists("embedded");
+        settings.public_enums = args.exists("public_enums");
         settings.input = args.files("input", database::is_database);
 
         for (auto && include : args.values("include"))
@@ -170,11 +175,12 @@ Where <spec> is one or more of:
 
             task_group group;
 
-            concurrency::concurrent_unordered_map<std::string, std::string> typeNameToDefinitionMap;
+            concurrency::concurrent_unordered_map<std::string, std::string> typeNameToEventDefinitionMap, typeNameToBaseTypeMap;
+            concurrency::concurrent_unordered_set<generic_abi_delegate> abiDelegateEntries;
             bool projectionFileWritten = false;
             for (auto&& ns_members : c.namespaces())
             {
-                group.add([&ns_members, &componentActivatableClasses, &projectionFileWritten, &typeNameToDefinitionMap]
+                group.add([&ns_members, &componentActivatableClasses, &projectionFileWritten, &typeNameToEventDefinitionMap, &typeNameToBaseTypeMap, &abiDelegateEntries]
                 {
                     auto&& [ns, members] = ns_members;
                     std::string_view currentType = "";
@@ -215,13 +221,15 @@ Where <spec> is one or more of:
                                     else
                                     {
                                         write_class(w, type);
+                                        add_base_type_entry(type, typeNameToBaseTypeMap);
                                     }
                                     if (settings.component && componentActivatableClasses.count(type) == 1)
                                     {
                                         write_factory_class(w, type);
                                     }
                                 }
-                                write_temp_class_event_source_subclass(helperWriter, type, typeNameToDefinitionMap);
+
+                                write_temp_class_event_source_subclass(helperWriter, type, typeNameToEventDefinitionMap);
                                 break;
                             case category::delegate_type:
                                 write_delegate(w, type);
@@ -232,7 +240,7 @@ Where <spec> is one or more of:
                                 break;
                             case category::interface_type:
                                 write_interface(w, type);
-                                write_temp_interface_event_source_subclass(helperWriter, type, typeNameToDefinitionMap);
+                                write_temp_interface_event_source_subclass(helperWriter, type, typeNameToEventDefinitionMap);
                                 break;
                             case category::struct_type:
                                 if (is_api_contract_type(type))
@@ -247,6 +255,7 @@ Where <spec> is one or more of:
                                 break;
                             }
 
+                            add_generic_type_references_in_type(type, abiDelegateEntries);
                             written = true;
                             requires_abi = requires_abi || type_requires_abi;
                         }
@@ -326,15 +335,7 @@ Where <spec> is one or more of:
                 group.add([&componentActivatableClasses, &projectionFileWritten]
                 {
                     writer wm;
-                    wm.write(R"(//------------------------------------------------------------------------------
-// <auto-generated>
-//     This file was generated by cswinrt.exe version %
-//
-//     Changes to this file may cause incorrect behavior and will be lost if
-//     the code is regenerated.
-// </auto-generated>
-//------------------------------------------------------------------------------
-)", VERSION_STRING);
+                    write_file_header(wm);
                     write_module_activation_factory(wm, componentActivatableClasses);
                     wm.flush_to_file(settings.output_folder / (std::string("WinRT_Module") + ".cs"));
                     projectionFileWritten = true;
@@ -342,23 +343,93 @@ Where <spec> is one or more of:
             }
 
             group.get();
+
             writer eventHelperWriter("WinRT");
-            eventHelperWriter.write(R"(//------------------------------------------------------------------------------
-// <auto-generated>
-//     This file was generated by cswinrt.exe version %
-//
-//     Changes to this file may cause incorrect behavior and will be lost if
-//     the code is regenerated.
-// </auto-generated>
-//------------------------------------------------------------------------------
-)", VERSION_STRING);
-            eventHelperWriter.write("namespace WinRT\n{\n%\n}", bind([&](writer& w) {
-                for (auto&& [key, value] : typeNameToDefinitionMap)
+            write_file_header(eventHelperWriter);
+            eventHelperWriter.write("using System;\nnamespace WinRT\n{\n%\n}", bind([&](writer& w) {
+                for (auto&& [key, value] : typeNameToEventDefinitionMap)
                 {
                     w.write("%", value);
                 }
             }));
             eventHelperWriter.flush_to_file(settings.output_folder / "WinRTEventHelpers.cs");
+
+            if (!typeNameToBaseTypeMap.empty())
+            {
+                writer baseTypeWriter("WinRT");
+                write_file_header(baseTypeWriter);
+                baseTypeWriter.write(R"(namespace WinRT
+{
+internal static class ProjectionTypesInitializer
+{
+internal readonly static System.Collections.Generic.Dictionary<string, string> TypeNameToBaseTypeNameMapping = new System.Collections.Generic.Dictionary<string, string>(%, System.StringComparer.Ordinal)
+{
+%
+};
+
+[System.Runtime.CompilerServices.ModuleInitializer]
+internal static void InitalizeProjectionTypes()
+{
+ComWrappersSupport.RegisterProjectionTypeBaseTypeMapping(TypeNameToBaseTypeNameMapping);
+}
+}
+})",
+typeNameToBaseTypeMap.size(),
+bind([&](writer& w) {
+                        for (auto&& [key, value] : typeNameToBaseTypeMap)
+                        {
+                            w.write(R"(["%"] = "%",)", key, value);
+                            w.write("\n");
+                        }
+    }));
+                baseTypeWriter.flush_to_file(settings.output_folder / "WinRTBaseTypeMappingHelper.cs");
+            }
+
+            if (!abiDelegateEntries.empty() && settings.netstandard_compat)
+            {
+                writer baseTypeWriter("WinRT");
+                write_file_header(baseTypeWriter);
+                baseTypeWriter.write(R"(
+using System;
+
+namespace WinRT
+{
+internal static class AbiDelegatesInitializer
+{
+
+[System.Runtime.CompilerServices.ModuleInitializer]
+internal static void InitalizeAbiDelegates()
+{
+%
+}
+
+%
+}
+})",
+                bind([&](writer& w) {
+                    for (auto&& entry : abiDelegateEntries)
+                    {
+                        w.write("Projections.RegisterAbiDelegate(%, typeof(%));\n", entry.abi_delegate_types, entry.abi_delegate_name);
+                    }
+
+                    if (settings.filter.includes("Windows.Foundation.AsyncStatus"))
+                    {
+                        w.write("Projections.RegisterAbiDelegate(new Type[] { typeof(void*), typeof(IntPtr), typeof(global::Windows.Foundation.AsyncStatus), typeof(int) }, typeof(_invoke_IntPtr_AsyncStatus));\n");
+                    }
+                }),
+                bind([&](writer& w) {
+                    for (auto&& entry : abiDelegateEntries)
+                    {
+                        w.write("%\n", entry.abi_delegate_declaration);
+                    }
+
+                    if (settings.filter.includes("Windows.Foundation.AsyncStatus"))
+                    {
+                        w.write("internal unsafe delegate int _invoke_IntPtr_AsyncStatus(void* thisPtr, IntPtr asyncInfo, global::Windows.Foundation.AsyncStatus asyncStatus);\n");
+                    }
+                }));
+                baseTypeWriter.flush_to_file(settings.output_folder / "WinRTAbiDelegateInitializer.cs");
+            }
 
             if (projectionFileWritten)
             {
@@ -369,15 +440,7 @@ Where <spec> is one or more of:
                         continue;
                     }
                     writer ws;
-                    ws.write(R"(//------------------------------------------------------------------------------
-// <auto-generated>
-//     This file was generated by cswinrt.exe version %
-//
-//     Changes to this file may cause incorrect behavior and will be lost if
-//     the code is regenerated.
-// </auto-generated>
-//------------------------------------------------------------------------------
-)", VERSION_STRING);
+                    write_file_header(ws);
                     ws.write(string.value);
                     ws.flush_to_file(settings.output_folder / (std::string(string.name) + ".cs"));
                 }

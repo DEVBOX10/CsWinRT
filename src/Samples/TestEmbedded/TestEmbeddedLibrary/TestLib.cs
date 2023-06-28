@@ -2,7 +2,7 @@
 using Alpha;
 using Beta;
 using Gamma;
-using Windows.Devices.Geolocation;
+using Windows.Media;
 
 namespace TestEmbeddedLibrary
 {
@@ -61,20 +61,56 @@ namespace TestEmbeddedLibrary
             return qiAgent.Run(x);
         }
 
-        async System.Threading.Tasks.Task CallGeoAsyncApi()
+        public int Test5()
         {
-            Console.WriteLine("Making a Microsoft.Devices.Geolocation.Geolocator object...");
-            Geolocator g = new();
-            Console.WriteLine("Setting the Desired Accuracy to Default on the Geolocator object...");
-            g.DesiredAccuracy = PositionAccuracy.Default;
-            Console.WriteLine("Accessing the Desired Accuracy, shows: " + g.DesiredAccuracy);
-            Console.WriteLine("Calling GetGeopositionAsync...");
-            Geoposition pos = await g.GetGeopositionAsync();
+            // make a Windows.Media.AudioFrame   
+            var aframe = new Windows.Media.AudioFrame(20);
+            using (AudioBuffer abuff = aframe.LockBuffer(AudioBufferAccessMode.Read))
+            {
+                return (int)abuff.Capacity;
+            }
         }
 
-        public void Test5()
+        public int Test6()
         {
-            CallGeoAsyncApi().Wait(1000);
+            Alpha.Class a = new();
+
+            int success = 0;
+            var stringList = a.GetStringList();
+            if (stringList.Count == 2)
+            {
+                success++;
+            }
+
+            if (stringList[0] == "alpha" && stringList[1] == "beta")
+            {
+                success++;
+            }
+
+            var intList = a.GetIntList();
+            if (intList.Count == 4)
+            {
+                success++;
+            }
+
+            int sum = 0;
+            foreach (var i in intList)
+            {
+                sum += i;
+            }
+
+            if (sum == 10)
+            {
+                success++;
+            }
+
+            var objList = a.GetObjectList();
+            if ((objList[0] == objList[1]))
+            {
+                success++;
+            }
+
+            return success;
         }
     }
 

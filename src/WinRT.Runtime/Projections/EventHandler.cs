@@ -22,7 +22,7 @@ namespace ABI.System
     static class EventHandler<T>
     {
         public static Guid PIID = GuidGenerator.CreateIID(typeof(global::System.EventHandler<T>));
-        private static readonly global::System.Type Abi_Invoke_Type = Expression.GetDelegateType(new global::System.Type[] { typeof(void*), typeof(IntPtr), Marshaler<T>.AbiType, typeof(int) });
+        private static readonly global::System.Type Abi_Invoke_Type = Projections.GetAbiDelegateType(new global::System.Type[] { typeof(void*), typeof(IntPtr), Marshaler<T>.AbiType, typeof(int) });
 
         private static readonly global::WinRT.Interop.IDelegateVftbl AbiToProjectionVftable;
         public static readonly IntPtr AbiToProjectionVftablePtr;
@@ -107,7 +107,7 @@ namespace ABI.System
                 {
                     __sender = MarshalInspectable<object>.CreateMarshaler2(sender);
                     __params[1] = MarshalInspectable<object>.GetAbi(__sender);
-                    __args = Marshaler<T>.CreateMarshaler(args);
+                    __args = Marshaler<T>.CreateMarshaler2(args);
                     __params[2] = Marshaler<T>.GetAbi(__args);
                     abiInvoke.DynamicInvokeAbi(__params);
                 }

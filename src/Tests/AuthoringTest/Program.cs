@@ -170,6 +170,7 @@ namespace AuthoringTest
     {
         public int X, Y;
         public string Value;
+        public BasicEnum basicEnum;
     }
 
     public struct ComplexStruct
@@ -458,7 +459,6 @@ namespace AuthoringTest
                 new BasicDelegate[] { new BasicDelegate((uint value) => {}) },
                 new [] { new DisposableClass().GetType() , new NonProjectedDisposableClass().GetType() },
                 new Type[] { typeof(TestClass), typeof(DisposableClass) },
-                new PrivateEnum[] { PrivateEnum.PrivateFirst, PrivateEnum.PrivateSecond}
             };
         }
     }

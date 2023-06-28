@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -21,7 +22,11 @@ namespace WinRT
             return type.GetGuidType().GUID;
         }
 
-        public static Guid GetIID(Type type)
+        public static Guid GetIID(
+#if NET
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)]
+#endif
+            Type type)
         {
             type = type.GetGuidType();
             if (!type.IsGenericType)
@@ -31,7 +36,11 @@ namespace WinRT
             return (Guid)type.GetField("PIID").GetValue(null);
         }
 
-        public static string GetSignature(Type type)
+        public static string GetSignature(
+#if NET
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicFields)]
+#endif
+            Type type)
         {
             if (type == typeof(object))
             {
@@ -87,7 +96,10 @@ namespace WinRT
                 }
             }
 
-            type = type.IsInterface ? (type.GetAuthoringMetadataType() ?? type) : type;
+            // For authoring interfaces, we use the metadata type to get the guid.
+            // For built-in system interfaces that are custom type mapped, we use the helper type to get the guid.
+            // For others, either the type itself or the helper type has the same guid and can be used.
+            type = type.IsInterface ? (type.GetAuthoringMetadataType() ?? helperType ?? type) : type;
 
             if (type.IsGenericType)
             {
@@ -148,6 +160,11 @@ namespace WinRT
             }
 #if !NET
             var data = wrt_pinterface_namespace.ToByteArray().Concat(UTF8Encoding.UTF8.GetBytes(sig)).ToArray();
+
+            using (SHA1 sha = new SHA1CryptoServiceProvider())
+            {
+                return encode_guid(sha.ComputeHash(data));
+            }
 #else
             var maxBytes = UTF8Encoding.UTF8.GetMaxByteCount(sig.Length);
 
@@ -156,11 +173,9 @@ namespace WinRT
             wrt_pinterface_namespace.TryWriteBytes(dataSpan);
             var numBytes = UTF8Encoding.UTF8.GetBytes(sig, dataSpan[16..]);
             data = data[..(16 + numBytes)];
+
+            return encode_guid(SHA1.HashData(data));
 #endif
-            using (SHA1 sha = new SHA1CryptoServiceProvider())
-            {
-                return encode_guid(sha.ComputeHash(data));
-            }
         }
     }
 }

@@ -5,18 +5,17 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
 namespace WinRT
 {
     [Flags]
-#if EMBED
-    internal
-#endif
-    enum TypeNameGenerationFlags
+    internal enum TypeNameGenerationFlags
     {
         None = 0,
         /// <summary>
@@ -26,20 +25,48 @@ namespace WinRT
         /// <summary>
         /// Don't output a type name of a custom .NET type. Generate a compatible WinRT type name if needed.
         /// </summary>
-        NoCustomTypeName = 0x2
+        ForGetRuntimeClassName = 0x2,
     }
 
-#if EMBED
-    internal
-#endif
-    static class TypeNameSupport
+    internal static class TypeNameSupport
     {
         private static readonly List<Assembly> projectionAssemblies = new List<Assembly>();
+        private static readonly List<IDictionary<string, string>> projectionTypeNameToBaseTypeNameMappings = new List<IDictionary<string, string>>();
         private static readonly ConcurrentDictionary<string, Type> typeNameCache = new ConcurrentDictionary<string, Type>(StringComparer.Ordinal) { ["TrackerCollection<T>"] = null };
+        private static readonly ConcurrentDictionary<string, Type> baseRcwTypeCache = new ConcurrentDictionary<string, Type>(StringComparer.Ordinal) { ["TrackerCollection<T>"] = null };
 
         public static void RegisterProjectionAssembly(Assembly assembly)
         {
             projectionAssemblies.Add(assembly);
+        }
+
+        public static void RegisterProjectionTypeBaseTypeMapping(IDictionary<string, string> typeNameToBaseTypeNameMapping)
+        {
+            projectionTypeNameToBaseTypeNameMappings.Add(typeNameToBaseTypeNameMapping);
+        }
+
+#if NET
+        [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicConstructors)]
+#endif
+        public static Type FindRcwTypeByNameCached(string runtimeClassName)
+        {
+            // Try to get the given type name. If it is not found, the type might have been trimmed.
+            // Due to that, check if one of the base types exists and if so use that instead for the RCW type.
+            var rcwType = FindTypeByNameCached(runtimeClassName);
+            if (rcwType is null)
+            {
+                rcwType = baseRcwTypeCache.GetOrAdd(runtimeClassName,
+#if NET
+                    [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicConstructors)]
+#endif
+                    (runtimeClassName) =>
+                    {
+                        var resolvedBaseType = projectionTypeNameToBaseTypeNameMappings.Find((dict) => dict.ContainsKey(runtimeClassName))?[runtimeClassName];
+                        return resolvedBaseType is not null ? FindRcwTypeByNameCached(resolvedBaseType) : null;
+                    });
+            }
+
+            return rcwType;
         }
 
         /// <summary>
@@ -47,20 +74,27 @@ namespace WinRT
         /// </summary>
         /// <param name="runtimeClassName">The runtime class name to attempt to parse.</param>
         /// <returns>The type, if found.  Null otherwise</returns>
+#if NET
+        [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicConstructors)]
+#endif
         public static Type FindTypeByNameCached(string runtimeClassName)
         {
-            return typeNameCache.GetOrAdd(runtimeClassName, (runtimeClassName) =>
-            {
-                Type implementationType = null;
-                try
+            return typeNameCache.GetOrAdd(runtimeClassName,
+#if NET
+                [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicConstructors)]
+#endif
+                (runtimeClassName) =>
                 {
-                    implementationType = FindTypeByName(runtimeClassName.AsSpan()).type;
-                }
-                catch (Exception)
-                {
-                }
-                return implementationType;
-            });
+                    Type implementationType = null;
+                    try
+                    {
+                        implementationType = FindTypeByName(runtimeClassName.AsSpan()).type;
+                    }
+                    catch (Exception)
+                    {
+                    }
+                    return implementationType;
+                });
         }
 
         /// <summary>
@@ -88,6 +122,10 @@ namespace WinRT
             else
             {
                 var (genericTypeName, genericTypes, remaining) = ParseGenericTypeName(runtimeClassName);
+                if (genericTypeName == null)
+                {
+                    return (null, -1);
+                }
                 return (FindTypeByNameCore(genericTypeName, genericTypes), remaining);
             }
         }
@@ -102,6 +140,11 @@ namespace WinRT
         /// We look up the type dynamically because at this point in the stack we can't know
         /// the full type closure of the application.
         /// </remarks>
+#if NET
+        [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2026:RequiresUnreferencedCode",
+            Justification = "Any types which are trimmed are not used by user code and there is fallback logic to handle that.")]
+        [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicConstructors)]
+#endif
         private static Type FindTypeByNameCore(string runtimeClassName, Type[] genericTypes)
         {
             Type resolvedType = Projections.FindCustomTypeForAbiTypeName(runtimeClassName);
@@ -111,7 +154,7 @@ namespace WinRT
                 if (genericTypes is null)
                 {
                     Type primitiveType = ResolvePrimitiveType(runtimeClassName);
-                    if (primitiveType is object)
+                    if (primitiveType is not null)
                     {
                         return primitiveType;
                     }
@@ -120,7 +163,7 @@ namespace WinRT
                 foreach (var assembly in projectionAssemblies)
                 {
                     Type type = assembly.GetType(runtimeClassName);
-                    if (type is object)
+                    if (type is not null)
                     {
                         resolvedType = type;
                         break;
@@ -133,7 +176,7 @@ namespace WinRT
                 foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
                 {
                     Type type = assembly.GetType(runtimeClassName);
-                    if (type is object)
+                    if (type is not null)
                     {
                         resolvedType = type;
                         break;
@@ -141,7 +184,7 @@ namespace WinRT
                 }
             }
 
-            if (resolvedType is object)
+            if (resolvedType is not null)
             {
                 if (genericTypes != null)
                 {
@@ -154,7 +197,8 @@ namespace WinRT
                 return resolvedType;
             }
 
-            throw new TypeLoadException($"Unable to find a type named '{runtimeClassName}'");
+            Debug.WriteLine($"FindTypeByNameCore: Unable to find a type named '{runtimeClassName}'");
+            return null;
         }
 
         public static Type ResolvePrimitiveType(string primitiveTypeName)
@@ -213,6 +257,11 @@ namespace WinRT
             {
                 // Resolve the generic type argument at this point in the parameter list.
                 var (genericType, endOfGenericArgument) = FindTypeByName(remainingTypeName);
+                if (genericType == null)
+                {
+                    return (null, null, -1);
+                }
+
                 remainingIndex += endOfGenericArgument;
                 genericTypes.Add(genericType);
                 remainingTypeName = remainingTypeName.Slice(endOfGenericArgument);
@@ -247,7 +296,7 @@ namespace WinRT
 
         /// <summary>
         /// Tracker for visited types when determining a WinRT interface to use as the type name.
-        /// Only used when GetNameForType is called with <see cref="TypeNameGenerationFlags.NoCustomTypeName"/>.
+        /// Only used when GetNameForType is called with <see cref="TypeNameGenerationFlags.ForGetRuntimeClassName"/>.
         /// </summary>
         private static readonly ThreadLocal<Stack<VisitedType>> VisitedTypes = new ThreadLocal<Stack<VisitedType>>(() => new Stack<VisitedType>());
 
@@ -262,23 +311,13 @@ namespace WinRT
             {
                 return nameBuilder.ToString();
             }
-            return null;
+            return string.Empty;
         }
 
         private static bool TryAppendSimpleTypeName(Type type, StringBuilder builder, TypeNameGenerationFlags flags)
         {
             if (type.IsPrimitive || type == typeof(string) || type == typeof(Guid) || type == typeof(TimeSpan))
             {
-                if ((flags & TypeNameGenerationFlags.GenerateBoxedName) != 0)
-                {
-                    builder.Append("Windows.Foundation.IReference`1<");
-                    if (!TryAppendSimpleTypeName(type, builder, flags & ~TypeNameGenerationFlags.GenerateBoxedName))
-                    {
-                        return false;
-                    }
-                    builder.Append('>');
-                    return true;
-                }
                 if (type == typeof(byte))
                 {
                     builder.Append("UInt8");
@@ -307,13 +346,16 @@ namespace WinRT
                 {
                     builder.Append(type.FullName);
                 }
-                else if ((flags & TypeNameGenerationFlags.NoCustomTypeName) != 0)
-                {
-                    return TryAppendWinRTInterfaceNameForType(type, builder, flags);
-                }
                 else
                 {
-                    builder.Append(type.FullName);
+                    if ((flags & TypeNameGenerationFlags.ForGetRuntimeClassName) != 0)
+                    {
+                        return TryAppendWinRTInterfaceNameForType(type, builder, flags);
+                    }
+                    else
+                    {
+                        builder.Append(type.FullName);
+                    }
                 }
             }
             return true;
@@ -321,7 +363,7 @@ namespace WinRT
 
         private static bool TryAppendWinRTInterfaceNameForType(Type type, StringBuilder builder, TypeNameGenerationFlags flags)
         {
-            Debug.Assert((flags & TypeNameGenerationFlags.NoCustomTypeName) != 0);
+            Debug.Assert((flags & TypeNameGenerationFlags.ForGetRuntimeClassName) != 0);
             Debug.Assert(!type.IsGenericTypeDefinition);
 
             var visitedTypes = VisitedTypes.Value;
@@ -346,7 +388,7 @@ namespace WinRT
                 {
                     if (Projections.IsTypeWindowsRuntimeType(iface))
                     {
-                        if (interfaceTypeToUse is null || iface.IsAssignableFrom(interfaceTypeToUse))
+                        if (interfaceTypeToUse is null || interfaceTypeToUse.IsAssignableFrom(iface))
                         {
                             interfaceTypeToUse = iface;
                         }
@@ -378,12 +420,31 @@ namespace WinRT
             if (type.IsSZArray)
 #endif
             {
-                builder.Append("Windows.Foundation.IReferenceArray`1<");
-                if (TryAppendTypeName(type.GetElementType(), builder, flags & ~TypeNameGenerationFlags.GenerateBoxedName))
+                var elementType = type.GetElementType();
+                if (elementType.ShouldProvideIReference())
                 {
-                    builder.Append('>');
-                    return true;
+                    builder.Append("Windows.Foundation.IReferenceArray`1<");
+                    if (TryAppendTypeName(elementType, builder, flags & ~TypeNameGenerationFlags.GenerateBoxedName))
+                    {
+                        builder.Append('>');
+                        return true;
+                    }
+                    return false;
                 }
+                else
+                {
+                    return false;
+                }
+            }
+
+            if ((flags & TypeNameGenerationFlags.GenerateBoxedName) != 0 && type.ShouldProvideIReference())
+            {
+                builder.Append("Windows.Foundation.IReference`1<");
+                if (!TryAppendSimpleTypeName(type, builder, flags & ~TypeNameGenerationFlags.GenerateBoxedName))
+                {
+                    return false;
+                }
+                builder.Append('>');
                 return true;
             }
 
@@ -392,7 +453,7 @@ namespace WinRT
                 return TryAppendSimpleTypeName(type, builder, flags);
             }
 
-            if ((flags & TypeNameGenerationFlags.NoCustomTypeName) != 0 && !Projections.IsTypeWindowsRuntimeType(type))
+            if ((flags & TypeNameGenerationFlags.ForGetRuntimeClassName) != 0 && !Projections.IsTypeWindowsRuntimeType(type))
             {
                 return TryAppendWinRTInterfaceNameForType(type, builder, flags);
             }
@@ -425,7 +486,7 @@ namespace WinRT
                 }
                 first = false;
 
-                if ((flags & TypeNameGenerationFlags.NoCustomTypeName) != 0)
+                if ((flags & TypeNameGenerationFlags.ForGetRuntimeClassName) != 0)
                 {
                     VisitedTypes.Value.Push(new VisitedType
                     {
@@ -436,7 +497,7 @@ namespace WinRT
 
                 bool success = TryAppendTypeName(argument, builder, flags & ~TypeNameGenerationFlags.GenerateBoxedName);
 
-                if ((flags & TypeNameGenerationFlags.NoCustomTypeName) != 0)
+                if ((flags & TypeNameGenerationFlags.ForGetRuntimeClassName) != 0)
                 {
                     VisitedTypes.Value.Pop();
                 }

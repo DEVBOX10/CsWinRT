@@ -66,18 +66,18 @@ To make your component available as a NuGet package, it is important to include 
             target="build\MyAuthoredComponent.targets" />
       
       <!-- Include the managed DLLs -->
-      <file src="C:\Path\To\CsWinRT\NugetDir\lib\net5.0\WinRT.Host.Shim.dll"                                  
+      <file src="C:\Path\To\CsWinRT\NugetDir\lib\net6.0\WinRT.Host.Shim.dll"                                  
             target="lib\$(TargetFramework)\WinRT.Host.Shim.dll" />  
-      <file src="C:\Path\To\CsWinRT\NugetDir\lib\net5.0\WinRT.Runtime.dll"                                  
+      <file src="C:\Path\To\CsWinRT\NugetDir\lib\net6.0\WinRT.Runtime.dll"                                  
             target="lib\$(TargetFramework)\WinRT.Runtime.dll" />
       
       <!-- Include the native DLLs -->
-      <file src="C:\Path\To\CsWinRT\NugetDir\runtimes\win-x64\native\WinRT.Host.dll"                                  
-            target="runtimes\win-x64\native\WinRT.Host.dll" />
-      <file src="C:\Path\To\CsWinRT\NugetDir\runtimes\win-x86\native\WinRT.Host.dll"                                  
-            target="runtimes\win-x86\native\WinRT.Host.dll" />
-      <file src="C:\Path\To\CsWinRT\NugetDir\runtimes\win-arm64\native\WinRT.Host.dll"                                  
-            target="runtimes\win-arm64\native\WinRT.Host.dll" />
+      <file src="C:\Path\To\CsWinRT\NugetDir\hosting\x64\native\WinRT.Host.dll"                                  
+            target="hosting\x64\native\WinRT.Host.dll" />
+      <file src="C:\Path\To\CsWinRT\NugetDir\hosting\x86\native\WinRT.Host.dll"                                  
+            target="hosting\x86\native\WinRT.Host.dll" />
+      <file src="C:\Path\To\CsWinRT\NugetDir\hosting\arm64\native\WinRT.Host.dll"                                  
+            target="hosting\arm64\native\WinRT.Host.dll" />
       
       </files>
       ```
@@ -106,7 +106,10 @@ Consuming a C#/WinRT component from a C++/WinRT desktop application is supported
 - **Package Reference**: In Visual Studio, right-click on the project in Solution Explorer and click **Manage NuGet packages** to search for and install the component package.
 
 - **Project Reference**: In Visual Studio, right-click on the project in Solution Explorer and click **Add** -> **Reference**. Select the C#/WinRT component project under the **Projects** node. 
+  - Note: The authoring project cannot target AnyCPU due to limitations between MSBuild and C++ Projects.
+
   - Note: If your authored component is built with C#/WinRT version 1.3.3 or earlier, you also need a file reference to the `*.winmd` generated in the authored component's output directory. To add a file reference, right-click on the project in Solution Explorer and click **Add** -> **Reference**. Select the file from the **Browse** node. 
+
 
 #### Manifest Class Registration
 
@@ -175,7 +178,7 @@ The following tables outline the Windows App SDK application types that are supp
 |:--|:-:|:-:|:-:|
 |C++ Packaged|Project Reference| ✅ | |
 |C++ Packaged with WAP |Project Reference| 🟥 | [#1120](https://github.com/microsoft/CsWinRT/issues/1120) |
-|C++ Unpackaged|Project Reference| 🟥 | [#1116](https://github.com/microsoft/CsWinRT/issues/1116) |
+|C++ Unpackaged|Project Reference| ✅ | |
 |C++ Packaged|Package Reference|🟨 | [#1118](https://github.com/microsoft/CsWinRT/issues/1118) |
 |C++ Packaged with WAP |Package Reference| 🟥 | [#1123](https://github.com/microsoft/CsWinRT/issues/1123) |
 |C++ Unpackaged|Package Reference|🟨 | [#1118](https://github.com/microsoft/CsWinRT/issues/1118) |
@@ -185,7 +188,7 @@ The following tables outline the Windows App SDK application types that are supp
 |:--|:-:|:-:|:-:|
 |C# Packaged|Project Reference| ✅ |
 |C# Packaged with WAP|Project Reference| ✅ |
-|C# Unpackaged|Project Reference|🟥| [#1116](https://github.com/microsoft/CsWinRT/issues/1116) |
+|C# Unpackaged|Project Reference| ✅ |  |
 |C# Packaged|Package Reference| 🟨 | [#1118](https://github.com/microsoft/CsWinRT/issues/1118) |
 |C# Packaged with WAP |Package Reference| 🟨 | [#1118](https://github.com/microsoft/CsWinRT/issues/1118) |
 |C# Unpackaged|Package Reference|🟥 | [#1116](https://github.com/microsoft/CsWinRT/issues/1116) |

@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -17,6 +18,9 @@ namespace ABI.Windows.Foundation
         private static global::ABI.System.Nullable<T>.Vftbl AbiToProjectionVftable;
         public static IntPtr AbiToProjectionVftablePtr;
 
+#if NET
+        [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2026:RequiresUnreferencedCode", Justification = "ABI types used with MakeGenericType are not reflected on.")]
+#endif
         static unsafe BoxedValueIReferenceImpl()
         {
             AbiToProjectionVftable = new global::ABI.System.Nullable<T>.Vftbl
@@ -109,7 +113,7 @@ namespace ABI.System
             internal IInspectable.Vftbl IInspectableVftbl;
             public global::System.Delegate get_Value_0;
             public static Guid PIID = GuidGenerator.CreateIID(typeof(Nullable<T>));
-            public static readonly global::System.Type get_Value_0_Type = Expression.GetDelegateType(new global::System.Type[] { typeof(void*), Marshaler<T>.AbiType.MakeByRefType(), typeof(int) });
+            public static readonly global::System.Type get_Value_0_Type = Projections.GetAbiDelegateType(new global::System.Type[] { typeof(void*), Marshaler<T>.AbiType.MakeByRefType(), typeof(int) });
 
             internal unsafe Vftbl(IntPtr thisPtr)
             {

@@ -522,10 +522,10 @@ namespace ABI.System.Collections.Generic
             public global::System.Delegate Remove_5;
             public IDictionary_Delegates.Clear_6 Clear_6;
             public static Guid PIID = GuidGenerator.CreateIID(typeof(IDictionary<K, V>));
-            private static readonly Type Lookup_0_Type = Expression.GetDelegateType(new Type[] { typeof(void*), Marshaler<K>.AbiType, Marshaler<V>.AbiType.MakeByRefType(), typeof(int) });
-            private static readonly Type HasKey_2_Type = Expression.GetDelegateType(new Type[] { typeof(void*), Marshaler<K>.AbiType, typeof(byte).MakeByRefType(), typeof(int) });
-            private static readonly Type Insert_4_Type = Expression.GetDelegateType(new Type[] { typeof(void*), Marshaler<K>.AbiType, Marshaler<V>.AbiType, typeof(byte).MakeByRefType(), typeof(int) });
-            private static readonly Type Remove_5_Type = Expression.GetDelegateType(new Type[] { typeof(void*), Marshaler<K>.AbiType, typeof(int) });
+            private static readonly Type Lookup_0_Type = Projections.GetAbiDelegateType(new Type[] { typeof(void*), Marshaler<K>.AbiType, Marshaler<V>.AbiType.MakeByRefType(), typeof(int) });
+            private static readonly Type HasKey_2_Type = Projections.GetAbiDelegateType(new Type[] { typeof(void*), Marshaler<K>.AbiType, typeof(byte).MakeByRefType(), typeof(int) });
+            private static readonly Type Insert_4_Type = Projections.GetAbiDelegateType(new Type[] { typeof(void*), Marshaler<K>.AbiType, Marshaler<V>.AbiType, typeof(byte).MakeByRefType(), typeof(int) });
+            private static readonly Type Remove_5_Type = Projections.GetAbiDelegateType(new Type[] { typeof(void*), Marshaler<K>.AbiType, typeof(int) });
 
             internal unsafe Vftbl(IntPtr thisPtr)
             {
@@ -733,7 +733,7 @@ namespace ABI.System.Collections.Generic
             var __params = new object[] { ThisPtr, null, null };
             try
             {
-                __key = Marshaler<K>.CreateMarshaler(key);
+                __key = Marshaler<K>.CreateMarshaler2(key);
                 __params[1] = Marshaler<K>.GetAbi(__key);
                 _obj.Vftbl.Lookup_0.DynamicInvokeAbi(__params);
                 return Marshaler<V>.FromAbi(__params[2]);
@@ -751,7 +751,7 @@ namespace ABI.System.Collections.Generic
             var __params = new object[] { ThisPtr, null, null };
             try
             {
-                __key = Marshaler<K>.CreateMarshaler(key);
+                __key = Marshaler<K>.CreateMarshaler2(key);
                 __params[1] = Marshaler<K>.GetAbi(__key);
                 _obj.Vftbl.HasKey_2.DynamicInvokeAbi(__params);
                 return (byte)__params[2] != 0;
@@ -783,9 +783,9 @@ namespace ABI.System.Collections.Generic
             var __params = new object[] { ThisPtr, null, null, null };
             try
             {
-                __key = Marshaler<K>.CreateMarshaler(key);
+                __key = Marshaler<K>.CreateMarshaler2(key);
                 __params[1] = Marshaler<K>.GetAbi(__key);
-                __value = Marshaler<V>.CreateMarshaler(value);
+                __value = Marshaler<V>.CreateMarshaler2(value);
                 __params[2] = Marshaler<V>.GetAbi(__value);
                 _obj.Vftbl.Insert_4.DynamicInvokeAbi(__params);
                 return (byte)__params[3] != 0;
@@ -803,7 +803,7 @@ namespace ABI.System.Collections.Generic
             var __params = new object[] { ThisPtr, null };
             try
             {
-                __key = Marshaler<K>.CreateMarshaler(key);
+                __key = Marshaler<K>.CreateMarshaler2(key);
                 __params[1] = Marshaler<K>.GetAbi(__key);
                 _obj.Vftbl.Remove_5.DynamicInvokeAbi(__params);
             }

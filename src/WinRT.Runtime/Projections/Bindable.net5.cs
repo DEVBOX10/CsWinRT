@@ -16,12 +16,14 @@ namespace Microsoft.UI.Xaml.Interop
 {
     [global::WinRT.WindowsRuntimeType]
     [Guid("036D2C08-DF29-41AF-8AA2-D774BE62BA6F")]
+    [global::WinRT.WindowsRuntimeHelperType(typeof(global::ABI.Microsoft.UI.Xaml.Interop.IBindableIterable))]
     internal interface IBindableIterable
     {
         IBindableIterator First();
     }
     [global::WinRT.WindowsRuntimeType]
     [Guid("6A1D6C07-076D-49F2-8314-F52C9C9A8331")]
+    [global::WinRT.WindowsRuntimeHelperType(typeof(global::ABI.Microsoft.UI.Xaml.Interop.IBindableIterator))]
     internal interface IBindableIterator
     {
         bool MoveNext();
@@ -51,6 +53,7 @@ namespace Microsoft.UI.Xaml.Interop
     }
     [global::WinRT.WindowsRuntimeType]
     [Guid("346DD6E7-976E-4BC3-815D-ECE243BC0F33")]
+    [global::WinRT.WindowsRuntimeHelperType(typeof(global::ABI.Microsoft.UI.Xaml.Interop.IBindableVectorView))]
     internal interface IBindableVectorView : IEnumerable
     {
         object GetAt(uint index);
@@ -1272,7 +1275,7 @@ namespace ABI.System.Collections
             return ObjectReference<Vftbl>.FromAbi(thisPtr);
         }
 
-        private static FromAbiHelper _VectorToList(IWinRTObject _this)
+        internal static FromAbiHelper _VectorToList(IWinRTObject _this)
         {
             return (FromAbiHelper)_this.GetOrCreateTypeHelperData(typeof(global::System.Collections.IList).TypeHandle,
                 () => new FromAbiHelper((global::Microsoft.UI.Xaml.Interop.IBindableVector)_this));
