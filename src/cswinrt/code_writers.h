@@ -1862,40 +1862,22 @@ internal static % Instance => _instance;
         else
         {
             w.write(R"(
-internal sealed class _% : IWinRTObject
+internal sealed class _%
 {
 private IObjectReference _obj;
 public _%()
 {
-_obj = %(GuidGenerator.GetIID(typeof(%.%).GetHelperType()));
+_obj = %(%.IID);
 }
 
 %
 internal static % Instance => (%)_instance;
-
-IObjectReference IWinRTObject.NativeObject => _obj;
-bool IWinRTObject.HasUnwrappableNativeObject => false;
-private volatile global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, IObjectReference> _queryInterfaceCache;
-private global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, IObjectReference> MakeQueryInterfaceCache()
-{
-    global::System.Threading.Interlocked.CompareExchange(ref _queryInterfaceCache, new global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, IObjectReference>(), null); 
-    return _queryInterfaceCache;
-}
-global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, IObjectReference> IWinRTObject.QueryInterfaceCache => _queryInterfaceCache ?? MakeQueryInterfaceCache();
-private volatile global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, object> _additionalTypeData;
-private global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, object> MakeAdditionalTypeData()
-{
-    global::System.Threading.Interlocked.CompareExchange(ref _additionalTypeData, new global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, object>(), null); 
-    return _additionalTypeData;
-}
-global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, object> IWinRTObject.AdditionalTypeData => _additionalTypeData ?? MakeAdditionalTypeData();
 }
 )",
                 cache_type_name,
                 cache_type_name,
                 factoryAs,
-                class_type.TypeNamespace(),
-                cache_type_name,
+                bind<write_type_name>(class_type, typedef_name_type::StaticAbiClass, true),
                 instance,
                 cache_type_name,
                 cache_type_name);
@@ -2109,7 +2091,7 @@ private IObjectReference % => __% ?? Make__%();
 private static volatile IObjectReference __%;
 private static IObjectReference Make__%()
 {
-    global::System.Threading.Interlocked.CompareExchange(ref __%, %As(GuidGenerator.GetIID(typeof(%).GetHelperType())), null);
+    global::System.Threading.Interlocked.CompareExchange(ref __%, %As(%.IID), null);
     return __%;
 }
 private static IObjectReference % => __% ?? Make__%();
@@ -2119,7 +2101,7 @@ private static IObjectReference % => __% ?? Make__%();
                     objrefname,
                     objrefname,
                     target,
-                    bind<write_type_name>(factory.type, typedef_name_type::Projected, false),
+                    bind<write_type_name>(factory.type, typedef_name_type::StaticAbiClass, true),
                     objrefname,
                     objrefname,
                     objrefname,
@@ -2494,28 +2476,25 @@ IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         auto enumerableObjRefName = std::regex_replace(objref_name, std::regex("IDictionary"), "IEnumerable_global__System_Collections_Generic_KeyValuePair") + "_";
 
         w.write(R"(
-private Dictionary<%, (IntPtr, %)> _lookupCache = new Dictionary<%, (IntPtr, %)>();
-
 %ICollection<%> %Keys => %.get_Keys(%);
 %ICollection<%> %Values => %.get_Values(%);
 %int %Count => %.get_Count(%);
 %bool %IsReadOnly => %.get_IsReadOnly(%);
 %% %this[% key] 
 {
-get => %.Indexer_Get(%, _lookupCache, key);
+get => %.Indexer_Get(%, null, key);
 set => %.Indexer_Set(%, key, value);
 }
 %void %Add(% key, % value) => %.Add(%, key, value);
 %bool %ContainsKey(% key) => %.ContainsKey(%, key);
 %bool %Remove(% key) => %.Remove(%, key);
-%bool %TryGetValue(% key, out % value) => %.TryGetValue(%, _lookupCache, key, out value);
+%bool %TryGetValue(% key, out % value) => %.TryGetValue(%, null, key, out value);
 %void %Add(KeyValuePair<%, %> item) => %.Add(%, item);
 %void %Clear() => %.Clear(%);
-%bool %Contains(KeyValuePair<%, %> item) => %.Contains(%, _lookupCache, item);
+%bool %Contains(KeyValuePair<%, %> item) => %.Contains(%, null, item);
 %void %CopyTo(KeyValuePair<%, %>[] array, int arrayIndex) => %.CopyTo(%, %, array, arrayIndex);
 bool ICollection<KeyValuePair<%, %>>.Remove(KeyValuePair<%, %> item) => %.Remove(%, item);
 )",
-key, value, key, value,
 visibility, key, self, abiClass, objref_name, //Keys
 visibility, value, self, abiClass, objref_name, // Values
 visibility, icollection, abiClass, objref_name, // Count
@@ -4053,43 +4032,24 @@ internal static _% Instance => _instance;
         else
         {
             w.write(R"(
-internal sealed class _% : IWinRTObject
+internal sealed class _%
 {
 private IObjectReference _obj;
 private IntPtr ThisPtr => _obj.ThisPtr;
 public _%()
 {
-_obj = ActivationFactory<%>.As(GuidGenerator.GetIID(typeof(%.%).GetHelperType()));
+_obj = ActivationFactory<%>.As(%.IID);
 }
 
 private static _% _instance = new _%();
 internal static _% Instance => _instance;
-
-IObjectReference IWinRTObject.NativeObject => _obj;
-bool IWinRTObject.HasUnwrappableNativeObject => false;
-private volatile global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, IObjectReference> _queryInterfaceCache;
-private global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, IObjectReference> MakeQueryInterfaceCache()
-{
-    global::System.Threading.Interlocked.CompareExchange(ref _queryInterfaceCache, new global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, IObjectReference>(), null); 
-    return _queryInterfaceCache;
-}
-global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, IObjectReference> IWinRTObject.QueryInterfaceCache => _queryInterfaceCache ?? MakeQueryInterfaceCache();
-private volatile global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, object> _additionalTypeData;
-private global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, object> MakeAdditionalTypeData()
-{
-    global::System.Threading.Interlocked.CompareExchange(ref _additionalTypeData, new global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, object>(), null); 
-    return _additionalTypeData;
-}
-global::System.Collections.Concurrent.ConcurrentDictionary<RuntimeTypeHandle, object> IWinRTObject.AdditionalTypeData => _additionalTypeData ?? MakeAdditionalTypeData();
-
 %
 }
 )",
                 cache_type_name,
                 cache_type_name,
                 class_type.TypeName(),
-                class_type.TypeNamespace(),
-                cache_type_name,
+                bind<write_type_name>(factory_type, typedef_name_type::StaticAbiClass, true),
                 cache_type_name,
                 cache_type_name,
                 cache_type_name,
@@ -4661,6 +4621,39 @@ return eventSource.EventActions;
             get<uint32_t>(get_arg(0)),
             get<uint16_t>(get_arg(1)),
             get<uint16_t>(get_arg(2)),
+            get<uint8_t>(get_arg(3)),
+            get<uint8_t>(get_arg(4)),
+            get<uint8_t>(get_arg(5)),
+            get<uint8_t>(get_arg(6)),
+            get<uint8_t>(get_arg(7)),
+            get<uint8_t>(get_arg(8)),
+            get<uint8_t>(get_arg(9)),
+            get<uint8_t>(get_arg(10)));
+    }
+
+    void write_guid_bytes(writer& w, TypeDef const& type)
+    {
+        auto attribute = get_attribute(type, "Windows.Foundation.Metadata", "GuidAttribute");
+        if (!attribute)
+        {
+            throw_invalid("'Windows.Foundation.Metadata.GuidAttribute' attribute for type '", type.TypeNamespace(), ".", type.TypeName(), "' not found");
+        }
+
+        auto args = attribute.Value().FixedArgs();
+
+        using std::get;
+
+        auto get_arg = [&](decltype(args)::size_type index) { return get<ElemSig>(args[index].value).value; };
+
+        w.write_printf(R"(0x%X, 0x%X, 0x%X, 0x%X, 0x%X, 0x%X, 0x%X, 0x%X, 0x%X, 0x%X, 0x%X, 0x%X, 0x%X, 0x%X, 0x%X, 0x%X)",
+            (get<uint32_t>(get_arg(0)) >> 0) & 0xFF,
+            (get<uint32_t>(get_arg(0)) >> 8) & 0xFF,
+            (get<uint32_t>(get_arg(0)) >> 16) & 0xFF,
+            (get<uint32_t>(get_arg(0)) >> 24) & 0xFF,
+            (get<uint16_t>(get_arg(1)) >> 0) & 0xFF,
+            (get<uint16_t>(get_arg(1)) >> 8) & 0xFF,
+            (get<uint16_t>(get_arg(2)) >> 0) & 0xFF,
+            (get<uint16_t>(get_arg(2)) >> 8) & 0xFF,
             get<uint8_t>(get_arg(3)),
             get<uint8_t>(get_arg(4)),
             get<uint8_t>(get_arg(5)),
@@ -6002,25 +5995,28 @@ public static Guid PIID = Vftbl.PIID;
 
         w.write(R"(% static class %
 {
+internal static global::System.Guid IID { get; } = new Guid(new global::System.ReadOnlySpan<byte>(new byte[] { % }));
+
 %
 }
 )", 
-        (is_exclusive_to(iface) || is_projection_internal(iface)) ? "internal" : internal_accessibility(),
-        bind<write_type_name>(iface, typedef_name_type::StaticAbiClass, false), 
-        [&](writer& w) {
-            if (!fast_abi_class_val.has_value() || (!fast_abi_class_val.value().contains_other_interface(iface) && !interfaces_equal(fast_abi_class_val.value().default_interface, iface))) {
-                write_static_abi_class_members(w, iface, INSPECTABLE_METHOD_COUNT);
-                return;
-            }
-            auto abi_methods_start_index = INSPECTABLE_METHOD_COUNT;
-            write_static_abi_class_members(w, fast_abi_class_val.value().default_interface, abi_methods_start_index);
-            abi_methods_start_index += distance(fast_abi_class_val.value().default_interface.MethodList()) + get_class_hierarchy_index(fast_abi_class_val.value().class_type);
-            for (auto&& other_iface : fast_abi_class_val.value().other_interfaces)
-            {
-                write_static_abi_class_members(w, other_iface, abi_methods_start_index);
-                abi_methods_start_index += distance(other_iface.MethodList());
-            }
-        });
+            (is_exclusive_to(iface) || is_projection_internal(iface)) ? "internal" : internal_accessibility(),
+            bind<write_type_name>(iface, typedef_name_type::StaticAbiClass, false),
+            bind<write_guid_bytes>(iface),
+            [&](writer& w) {
+                if (!fast_abi_class_val.has_value() || (!fast_abi_class_val.value().contains_other_interface(iface) && !interfaces_equal(fast_abi_class_val.value().default_interface, iface))) {
+                    write_static_abi_class_members(w, iface, INSPECTABLE_METHOD_COUNT);
+                    return;
+                }
+                auto abi_methods_start_index = INSPECTABLE_METHOD_COUNT;
+                write_static_abi_class_members(w, fast_abi_class_val.value().default_interface, abi_methods_start_index);
+                abi_methods_start_index += distance(fast_abi_class_val.value().default_interface.MethodList()) + get_class_hierarchy_index(fast_abi_class_val.value().class_type);
+                for (auto&& other_iface : fast_abi_class_val.value().other_interfaces)
+                {
+                    write_static_abi_class_members(w, other_iface, abi_methods_start_index);
+                    abi_methods_start_index += distance(other_iface.MethodList());
+                }
+            });
     }
 
     bool write_abi_interface(writer& w, TypeDef const& type)
